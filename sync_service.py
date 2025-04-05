@@ -551,7 +551,11 @@ def process_uploaded_file(file_path):
         # If no records were processed by department, try processing all data at once
         if total_records == 0:
             try:
-                records = process_manual_upload_data(None, data)
+                # Use a default department if available
+                default_dept = Department.query.first()
+                default_dept_id = default_dept.dept_id if default_dept else None
+                
+                records = process_manual_upload_data(default_dept_id, data)
                 total_records = records
                 department_records["all"] = records
             except Exception as e:
