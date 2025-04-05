@@ -122,29 +122,51 @@ def trigger_sync():
             sync_service.BIOTIME_PASSWORD = request.form.get('biotime_password')
             os.environ['BIOTIME_PASSWORD'] = request.form.get('biotime_password')
             
-        if 'sync_interval' in request.form:
+        if 'sync_interval' in request.form and request.form.get('sync_interval'):
             interval = request.form.get('sync_interval')
-            os.environ['SYNC_INTERVAL'] = interval
-            # Update scheduler if interval changed
-            if scheduler.get_job('biotime_sync'):
-                scheduler.reschedule_job(
-                    'biotime_sync', 
-                    trigger='interval', 
-                    hours=int(interval)
-                )
+            try:
+                interval_hours = int(interval)
+                os.environ['SYNC_INTERVAL'] = str(interval_hours)
+                # Update scheduler if interval changed
+                if scheduler.get_job('biotime_sync'):
+                    scheduler.reschedule_job(
+                        'biotime_sync', 
+                        trigger='interval', 
+                        hours=interval_hours
+                    )
+            except ValueError:
+                flash('Sync interval must be a valid number', 'warning')
                 
-        if 'departments' in request.form:
+        if 'departments' in request.form and request.form.get('departments'):
             departments = request.form.get('departments')
             # Parse comma-separated department list
-            sync_service.DEPARTMENTS = [int(d.strip()) for d in departments.split(',') if d.strip().isdigit()]
-            os.environ['SYNC_DEPARTMENTS'] = departments
+            try:
+                dept_list = []
+                for d in departments.split(','):
+                    if d.strip().isdigit():
+                        dept_list.append(int(d.strip()))
+                
+                if dept_list:  # Only update if at least one valid department ID
+                    sync_service.DEPARTMENTS = dept_list
+                    os.environ['SYNC_DEPARTMENTS'] = departments
+                else:
+                    flash('No valid department IDs provided, using default departments', 'warning')
+            except Exception as e:
+                flash(f'Error parsing departments: {str(e)}', 'warning')
+                logger.error(f"Error parsing departments: {str(e)}")
             
-        with app.app_context():
-            sync_service.sync_data()
-        flash('Data synchronization started successfully!', 'success')
+        # Perform the data synchronization in a try-except block to handle potential errors
+        try:
+            with app.app_context():
+                sync_service.sync_data(app)
+            flash('Data synchronization started successfully!', 'success')
+        except Exception as sync_e:
+            logger.error(f"Sync process error: {str(sync_e)}")
+            flash(f'Error during synchronization process: {str(sync_e)}', 'danger')
+            
     except Exception as e:
-        logger.error(f"Sync error: {str(e)}")
-        flash(f'Error during synchronization: {str(e)}', 'danger')
+        logger.error(f"Sync settings error: {str(e)}")
+        flash(f'Error updating sync settings: {str(e)}', 'danger')
     
     return redirect(url_for('settings'))
 
@@ -154,35 +176,80 @@ def save_settings():
     try:
         # Update sync settings if provided
         if 'biotime_url' in request.form:
-            sync_service.BIOTIME_API_BASE_URL = request.form.get('biotime_url')
-            os.environ['BIOTIME_API_URL'] = request.form.get('biotime_url')
+            url = request.form.get('biotime_url').strip()
+            if url:
+                sync_service.BIOTIME_API_BASE_URL = url
+                os.environ['BIOTIME_API_URL'] = url
             
         if 'biotime_username' in request.form:
-            sync_service.BIOTIME_USERNAME = request.form.get('biotime_username')
-            os.environ['BIOTIME_USERNAME'] = request.form.get('biotime_username')
+            username = request.form.get('biotime_username').strip()
+            if username:
+                sync_service.BIOTIME_USERNAME = username
+                os.environ['BIOTIME_USERNAME'] = username
             
         if 'biotime_password' in request.form and request.form.get('biotime_password') != '********':
-            sync_service.BIOTIME_PASSWORD = request.form.get('biotime_password')
-            os.environ['BIOTIME_PASSWORD'] = request.form.get('biotime_password')
+            password = request.form.get('biotime_password')
+            if password:
+                sync_service.BIOTIME_PASSWORD = password
+                os.environ['BIOTIME_PASSWORD'] = password
             
-        if 'sync_interval' in request.form:
-            interval = request.form.get('sync_interval')
-            os.environ['SYNC_INTERVAL'] = interval
-            # Update scheduler if interval changed
-            if scheduler.get_job('biotime_sync'):
-                scheduler.reschedule_job(
-                    'biotime_sync', 
-                    trigger='interval', 
-                    hours=int(interval)
-                )
+        if 'sync_interval' in request.form and request.form.get('sync_interval'):
+            interval = request.form.get('sync_interval').strip()
+            try:
+                interval_hours = int(interval)
+                if interval_hours > 0:
+                    os.environ['SYNC_INTERVAL'] = str(interval_hours)
+                    # Update scheduler if interval changed
+                    if scheduler.get_job('biotime_sync'):
+                        scheduler.reschedule_job(
+                            'biotime_sync', 
+                            trigger='interval', 
+                            hours=interval_hours
+                        )
+                else:
+                    flash('Sync interval must be a positive number', 'warning')
+            except ValueError:
+                flash('Sync interval must be a valid number', 'warning')
                 
-        if 'departments' in request.form:
-            departments = request.form.get('departments')
+        if 'departments' in request.form and request.form.get('departments'):
+            departments = request.form.get('departments').strip()
             # Parse comma-separated department list
-            sync_service.DEPARTMENTS = [int(d.strip()) for d in departments.split(',') if d.strip().isdigit()]
-            os.environ['SYNC_DEPARTMENTS'] = departments
+            try:
+                dept_list = []
+                for d in departments.split(','):
+                    if d.strip().isdigit():
+                        dept_list.append(int(d.strip()))
+                
+                if dept_list:  # Only update if at least one valid department ID
+                    sync_service.DEPARTMENTS = dept_list
+                    os.environ['SYNC_DEPARTMENTS'] = departments
+                else:
+                    flash('No valid department IDs provided, using default departments', 'warning')
+            except Exception as dept_e:
+                flash(f'Error parsing departments: {str(dept_e)}', 'warning')
+                logger.error(f"Error parsing departments: {str(dept_e)}")
+        
+        # UI settings 
+        ui_settings = {
+            'default_view': request.form.get('default_view', 'current'),
+            'weekend_days': request.form.getlist('weekend_days'),
+            'present_color': request.form.get('present_color', '#ffffff'),
+            'absent_color': request.form.get('absent_color', '#fbc6cb'),
+            'vacation_color': request.form.get('vacation_color', '#fcffcc'),
+            'transfer_color': request.form.get('transfer_color', '#b3ffb8'),
+            'sick_color': request.form.get('sick_color', '#ffc107'),
+            'eid_color': request.form.get('eid_color', '#0dcaf0')
+        }
+        
+        # Additional checkboxes
+        for setting in ['include_logo', 'include_legend', 'landscape_orientation']:
+            ui_settings[setting] = 'on' if setting in request.form else 'off'
+        
+        # Save UI settings to session
+        session['ui_settings'] = ui_settings
             
         flash('Settings saved successfully!', 'success')
+        logger.info(f"Applying color settings: {ui_settings}")
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
         flash(f'Error saving settings: {str(e)}', 'danger')
@@ -192,6 +259,7 @@ def save_settings():
 @app.route('/upload_sync', methods=['POST'])
 def upload_sync():
     """Handle file upload for manual sync"""
+    temp_path = None
     try:
         # Check if file was uploaded
         if 'sync_file' not in request.files:
@@ -205,31 +273,50 @@ def upload_sync():
             flash('No file selected', 'danger')
             return redirect(url_for('settings'))
             
-        # Check if file has allowed extension
-        if not file.filename.endswith('.txt'):
-            flash('Only .txt files are allowed', 'danger')
+        # Accept more file extensions (.txt, .csv, .tsv)
+        allowed_extensions = ['.txt', '.csv', '.tsv']
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            flash(f'Only {", ".join(allowed_extensions)} files are allowed', 'danger')
             return redirect(url_for('settings'))
             
+        # Generate unique filename to avoid conflicts
+        import uuid
+        temp_filename = f'temp_sync_file_{uuid.uuid4().hex}{file_ext}'
+        temp_path = os.path.join(os.getcwd(), temp_filename)
+        
         # Save the file temporarily
-        temp_path = os.path.join(os.getcwd(), 'temp_sync_file.txt')
         file.save(temp_path)
+        logger.info(f"Saved uploaded file to {temp_path}")
         
         # Process file with sync service
-        with app.app_context():
-            records = sync_service.process_uploaded_file(temp_path)
-            
-        # Remove temporary file
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-            
-        if records > 0:
-            flash(f'Successfully processed {records} records from uploaded file', 'success')
-        else:
-            flash('No records were processed from the uploaded file', 'warning')
+        records = 0
+        try:
+            # Use a separate try-except block for processing to handle database errors
+            with app.app_context():
+                records = sync_service.process_uploaded_file(temp_path)
+                
+            if records > 0:
+                flash(f'Successfully processed {records} records from uploaded file', 'success')
+            else:
+                flash('No records were processed from the uploaded file. Please check file format.', 'warning')
+                
+        except Exception as proc_e:
+            logger.error(f"Error in file processing: {str(proc_e)}")
+            flash(f'Error processing file data: {str(proc_e)}', 'danger')
             
     except Exception as e:
-        logger.error(f"Error processing uploaded file: {str(e)}")
-        flash(f'Error processing uploaded file: {str(e)}', 'danger')
+        logger.error(f"Error handling uploaded file: {str(e)}")
+        flash(f'Error uploading file: {str(e)}', 'danger')
+        
+    finally:
+        # Ensure temporary file is removed
+        try:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+                logger.info(f"Removed temporary file {temp_path}")
+        except Exception as cleanup_e:
+            logger.error(f"Error removing temporary file: {str(cleanup_e)}")
         
     return redirect(url_for('settings'))
 
