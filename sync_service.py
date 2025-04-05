@@ -264,10 +264,117 @@ def process_uploaded_file(file_path):
     from models import Department, Employee, AttendanceRecord, SyncLog
     
     total_records = 0
+    sync_log = None
+    # Define required columns
+    required_columns = ['emp_code', 'first_name', 'dept_name', 'att_date', 'punch_time']
     
     try:
-        # Read data from file
-        data = pd.read_csv(file_path, sep='\t', encoding='utf-8')
+        # Read data from file - try different formats
+        try:
+            # First try tab-separated format
+            data = pd.read_csv(file_path, sep='\t', encoding='utf-8')
+            
+            # Check if required columns exist
+            missing_columns = [col for col in required_columns if col not in data.columns]
+            
+            if missing_columns:
+                logger.warning(f"File is missing required columns: {missing_columns}")
+                # Try with different column names that might be in the file
+                column_mapping = {}
+                if 'emp_code' not in data.columns and 'employee_code' in data.columns:
+                    column_mapping['employee_code'] = 'emp_code'
+                if 'first_name' not in data.columns and 'name' in data.columns:
+                    column_mapping['name'] = 'first_name'
+                if 'dept_name' not in data.columns and 'department' in data.columns:
+                    column_mapping['department'] = 'dept_name'
+                if 'att_date' not in data.columns and 'date' in data.columns:
+                    column_mapping['date'] = 'att_date'
+                
+                # Rename columns if mappings exist
+                if column_mapping:
+                    data.rename(columns=column_mapping, inplace=True)
+                
+                # Check again for required columns
+                missing_columns = [col for col in required_columns if col not in data.columns]
+                if missing_columns:
+                    # Still missing columns, try comma-separated format
+                    data = pd.read_csv(file_path, encoding='utf-8')
+                    
+                    # Check required columns again
+                    missing_columns = [col for col in required_columns if col not in data.columns]
+                    if missing_columns:
+                        # If still missing, log error and return
+                        logger.error(f"Uploaded file is missing required columns: {missing_columns}")
+                        raise ValueError(f"Uploaded file is missing required columns: {missing_columns}")
+        except Exception as e:
+            # Try reading as plain text and parse manually
+            logger.warning(f"Could not parse file with pandas: {str(e)}")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            # Check if there are any lines
+            if not lines:
+                logger.error("Uploaded file is empty")
+                raise ValueError("Uploaded file is empty")
+            
+            # Try to identify the delimiter (tab or comma)
+            first_line = lines[0].strip()
+            delimiter = '\t' if '\t' in first_line else ',' if ',' in first_line else None
+            
+            if not delimiter:
+                logger.error("Could not identify delimiter in file")
+                raise ValueError("Could not identify delimiter in file (should be tab or comma separated)")
+            
+            # Parse header and data
+            header = [h.strip() for h in lines[0].split(delimiter)]
+            rows = []
+            for line in lines[1:]:
+                if line.strip():  # Skip empty lines
+                    values = [v.strip() for v in line.split(delimiter)]
+                    if len(values) >= len(header):
+                        row = {header[i]: values[i] for i in range(len(header))}
+                        rows.append(row)
+            
+            # Convert to DataFrame
+            data = pd.DataFrame(rows)
+            
+            # Check if we got any data
+            if data.empty:
+                logger.error("Could not parse any data from file")
+                raise ValueError("Could not parse any data from file")
+                
+            # Be more flexible with required columns for manually uploaded files
+            # As long as we have employee code and date, we can work with it
+            minimal_required = ['emp_code', 'att_date']
+            
+            # Try to map common column names
+            column_mapping = {}
+            for col in data.columns:
+                col_lower = col.lower()
+                if 'emp' in col_lower and 'code' in col_lower and 'emp_code' not in data.columns:
+                    column_mapping[col] = 'emp_code'
+                elif 'employee' in col_lower and 'code' in col_lower and 'emp_code' not in data.columns:
+                    column_mapping[col] = 'emp_code'
+                elif 'date' in col_lower and 'att_date' not in data.columns:
+                    column_mapping[col] = 'att_date'
+                elif 'time' in col_lower and 'punch_time' not in data.columns:
+                    column_mapping[col] = 'punch_time'
+                elif 'name' in col_lower and 'first_name' not in data.columns:
+                    column_mapping[col] = 'first_name'
+                elif 'dept' in col_lower and 'dept_name' not in data.columns:
+                    column_mapping[col] = 'dept_name'
+            
+            # Apply mappings
+            if column_mapping:
+                data.rename(columns=column_mapping, inplace=True)
+            
+            # Check minimal required columns
+            missing_minimal = [col for col in minimal_required if col not in data.columns]
+            if missing_minimal:
+                logger.error(f"Uploaded file is missing essential columns: {missing_minimal}")
+                raise ValueError(f"Uploaded file is missing essential columns: {missing_minimal}")
+                
+            # If we got here, we have the minimal required data to proceed
         
         if data.empty:
             logger.warning("Uploaded file contains no data")
@@ -286,14 +393,37 @@ def process_uploaded_file(file_path):
         department_records = {}
         errors = []
         
+        # First, try to process data specifically for each department
         for dept_id in DEPARTMENTS:
             try:
-                records = process_department_data(dept_id, data)
-                if records > 0:
-                    department_records[dept_id] = records
-                    total_records += records
+                # Filter data for this department if possible
+                dept_data = data
+                if 'dept_id' in data.columns:
+                    dept_data = data[data['dept_id'] == str(dept_id)]
+                elif 'dept_name' in data.columns:
+                    # Get department name for this ID
+                    dept = Department.query.filter_by(dept_id=str(dept_id)).first()
+                    if dept:
+                        dept_data = data[data['dept_name'].str.contains(dept.name, case=False, na=False)]
+                
+                if not dept_data.empty:
+                    records = process_manual_upload_data(dept_id, dept_data)
+                    if records > 0:
+                        department_records[dept_id] = records
+                        total_records += records
             except Exception as e:
                 error_msg = f"Error processing department {dept_id} from uploaded file: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+        
+        # If no records were processed by department, try processing all data at once
+        if total_records == 0:
+            try:
+                records = process_manual_upload_data(None, data)
+                total_records = records
+                department_records["all"] = records
+            except Exception as e:
+                error_msg = f"Error processing all data from uploaded file: {str(e)}"
                 logger.error(error_msg)
                 errors.append(error_msg)
                 
@@ -314,11 +444,232 @@ def process_uploaded_file(file_path):
         
     except Exception as e:
         logger.error(f"Error processing uploaded file: {str(e)}")
-        if 'sync_log' in locals() and sync_log:
+        if sync_log:
             sync_log.status = "error"
             sync_log.error_message = str(e)
             db.session.commit()
         return 0
+
+def process_manual_upload_data(dept_id, data):
+    """
+    Process manual upload data for a specific department
+    
+    Args:
+        dept_id: ID of the department
+        data: DataFrame containing attendance data
+        
+    Returns:
+        Number of records processed
+    """
+    # Import here to avoid circular imports
+    from app import db
+    from models import Department, Employee, AttendanceRecord
+    
+    records_processed = 0
+    
+    # Process each row in the dataframe
+    for _, row in data.iterrows():
+        try:
+            # Get employee code
+            emp_code = None
+            if 'emp_code' in row:
+                emp_code = str(row['emp_code'])
+            elif 'employee_code' in row:
+                emp_code = str(row['employee_code'])
+            
+            if not emp_code:
+                logger.warning("Skipping row: No employee code found")
+                continue
+                
+            # Get or create employee
+            employee = Employee.query.filter_by(emp_code=emp_code).first()
+            if not employee:
+                # Try to get employee name
+                name = None
+                if 'first_name' in row and 'last_name' in row:
+                    name = f"{row['first_name']} {row['last_name']}"
+                elif 'first_name' in row:
+                    name = row['first_name']
+                elif 'name' in row:
+                    name = row['name']
+                
+                if not name:
+                    logger.warning(f"Skipping row: No name found for employee {emp_code}")
+                    continue
+                    
+                # Get department if not specified
+                department_id = None
+                if dept_id:
+                    dept = Department.query.filter_by(dept_id=str(dept_id)).first()
+                    if dept:
+                        department_id = dept.id
+                else:
+                    # Try to get department from data
+                    dept_name = None
+                    if 'dept_name' in row:
+                        dept_name = row['dept_name']
+                    elif 'department' in row:
+                        dept_name = row['department']
+                    
+                    if dept_name:
+                        dept = Department.query.filter(Department.name.ilike(f"%{dept_name}%")).first()
+                        if dept:
+                            department_id = dept.id
+                
+                # Create new employee
+                employee = Employee(
+                    emp_code=emp_code,
+                    name=name,
+                    department_id=department_id
+                )
+                db.session.add(employee)
+                db.session.flush()  # Get ID without committing
+            
+            # Get attendance date
+            att_date = None
+            if 'att_date' in row:
+                att_date = row['att_date']
+            elif 'date' in row:
+                att_date = row['date']
+                
+            if not att_date:
+                logger.warning(f"Skipping row: No date found for employee {emp_code}")
+                continue
+                
+            # Parse date
+            try:
+                if isinstance(att_date, str):
+                    # Try different date formats
+                    date_formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%m-%d-%Y']
+                    for date_format in date_formats:
+                        try:
+                            parsed_date = datetime.strptime(att_date, date_format).date()
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        # If no format worked
+                        logger.warning(f"Skipping row: Could not parse date '{att_date}' for employee {emp_code}")
+                        continue
+                else:
+                    # Try to convert to date if it's already a datetime
+                    parsed_date = att_date.date() if hasattr(att_date, 'date') else att_date
+            except Exception as e:
+                logger.warning(f"Skipping row: Error parsing date '{att_date}' for employee {emp_code}: {str(e)}")
+                continue
+            
+            # Check if record already exists
+            existing_record = AttendanceRecord.query.filter_by(
+                employee_id=employee.id,
+                date=parsed_date
+            ).first()
+            
+            if existing_record:
+                # Update existing record
+                if 'punch_time' in row and row['punch_time']:
+                    punch_time = row['punch_time']
+                    if isinstance(punch_time, str):
+                        try:
+                            # Try to parse time
+                            time_formats = ['%H:%M:%S', '%H:%M', '%I:%M:%S %p', '%I:%M %p']
+                            for time_format in time_formats:
+                                try:
+                                    parsed_time = datetime.strptime(punch_time, time_format).time()
+                                    break
+                                except ValueError:
+                                    continue
+                            else:
+                                logger.warning(f"Could not parse time '{punch_time}' for employee {emp_code}")
+                                continue
+                                
+                            # Combine date and time
+                            dt = datetime.combine(parsed_date, parsed_time)
+                            
+                            # Check if check-in or check-out
+                            punch_state = row.get('punch_state', '').lower()
+                            if punch_state == 'in' or 'in' in punch_state:
+                                if not existing_record.clock_in or dt < existing_record.clock_in:
+                                    existing_record.clock_in = dt
+                            elif punch_state == 'out' or 'out' in punch_state:
+                                if not existing_record.clock_out or dt > existing_record.clock_out:
+                                    existing_record.clock_out = dt
+                        except Exception as e:
+                            logger.warning(f"Error processing punch time '{punch_time}': {str(e)}")
+                
+                # Update attendance status if available
+                if 'attendance_status' in row and row['attendance_status']:
+                    status = row['attendance_status'].upper()
+                    if status in ['P', 'A', 'V', 'T', 'S', 'E']:
+                        existing_record.attendance_status = status
+                
+                # Update total time if available (and clock in/out are set)
+                if existing_record.clock_in and existing_record.clock_out:
+                    time_diff = existing_record.clock_out - existing_record.clock_in
+                    total_hours = time_diff.total_seconds() / 3600
+                    existing_record.total_time = f"{total_hours:.2f}"
+                
+                existing_record.updated_at = datetime.utcnow()
+                records_processed += 1
+            else:
+                # Create new record
+                record = AttendanceRecord(
+                    employee_id=employee.id,
+                    date=parsed_date,
+                    weekday=parsed_date.strftime('%A')
+                )
+                
+                # Set punch times if available
+                if 'punch_time' in row and row['punch_time']:
+                    punch_time = row['punch_time']
+                    if isinstance(punch_time, str):
+                        try:
+                            # Try to parse time
+                            time_formats = ['%H:%M:%S', '%H:%M', '%I:%M:%S %p', '%I:%M %p']
+                            for time_format in time_formats:
+                                try:
+                                    parsed_time = datetime.strptime(punch_time, time_format).time()
+                                    break
+                                except ValueError:
+                                    continue
+                            else:
+                                logger.warning(f"Could not parse time '{punch_time}' for employee {emp_code}")
+                                continue
+                                
+                            # Combine date and time
+                            dt = datetime.combine(parsed_date, parsed_time)
+                            
+                            # Check if check-in or check-out
+                            punch_state = row.get('punch_state', '').lower()
+                            if punch_state == 'in' or 'in' in punch_state:
+                                record.clock_in = dt
+                            elif punch_state == 'out' or 'out' in punch_state:
+                                record.clock_out = dt
+                        except Exception as e:
+                            logger.warning(f"Error processing punch time '{punch_time}': {str(e)}")
+                
+                # Set attendance status if available
+                if 'attendance_status' in row and row['attendance_status']:
+                    status = row['attendance_status'].upper()
+                    if status in ['P', 'A', 'V', 'T', 'S', 'E']:
+                        record.attendance_status = status
+                
+                # Calculate total time if both clock in and out are set
+                if record.clock_in and record.clock_out:
+                    time_diff = record.clock_out - record.clock_in
+                    total_hours = time_diff.total_seconds() / 3600
+                    record.total_time = f"{total_hours:.2f}"
+                
+                db.session.add(record)
+                records_processed += 1
+        
+        except Exception as e:
+            logger.error(f"Error processing row: {str(e)}")
+            continue
+    
+    # Commit all changes
+    db.session.commit()
+    
+    return records_processed
 
 def sync_data(app=None):
     """
