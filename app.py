@@ -94,18 +94,98 @@ def settings():
     # Get last sync information
     last_sync = SyncLog.query.order_by(SyncLog.sync_time.desc()).first()
     
-    return render_template('settings.html', last_sync=last_sync, os=os)
+    # Get current sync settings
+    sync_settings = {
+        'api_url': os.environ.get('BIOTIME_API_URL', sync_service.BIOTIME_API_BASE_URL),
+        'username': os.environ.get('BIOTIME_USERNAME', sync_service.BIOTIME_USERNAME),
+        'password': os.environ.get('BIOTIME_PASSWORD', sync_service.BIOTIME_PASSWORD),
+        'interval': os.environ.get('SYNC_INTERVAL', '4'),
+        'departments': os.environ.get('SYNC_DEPARTMENTS', ','.join(str(d) for d in sync_service.DEPARTMENTS))
+    }
+    
+    return render_template('settings.html', last_sync=last_sync, sync_settings=sync_settings)
 
 @app.route('/sync', methods=['POST'])
 def trigger_sync():
     """Manually trigger data synchronization"""
     try:
+        # Update sync settings if provided
+        if 'biotime_url' in request.form:
+            sync_service.BIOTIME_API_BASE_URL = request.form.get('biotime_url')
+            os.environ['BIOTIME_API_URL'] = request.form.get('biotime_url')
+            
+        if 'biotime_username' in request.form:
+            sync_service.BIOTIME_USERNAME = request.form.get('biotime_username')
+            os.environ['BIOTIME_USERNAME'] = request.form.get('biotime_username')
+            
+        if 'biotime_password' in request.form and request.form.get('biotime_password') != '********':
+            sync_service.BIOTIME_PASSWORD = request.form.get('biotime_password')
+            os.environ['BIOTIME_PASSWORD'] = request.form.get('biotime_password')
+            
+        if 'sync_interval' in request.form:
+            interval = request.form.get('sync_interval')
+            os.environ['SYNC_INTERVAL'] = interval
+            # Update scheduler if interval changed
+            if scheduler.get_job('biotime_sync'):
+                scheduler.reschedule_job(
+                    'biotime_sync', 
+                    trigger='interval', 
+                    hours=int(interval)
+                )
+                
+        if 'departments' in request.form:
+            departments = request.form.get('departments')
+            # Parse comma-separated department list
+            sync_service.DEPARTMENTS = [int(d.strip()) for d in departments.split(',') if d.strip().isdigit()]
+            os.environ['SYNC_DEPARTMENTS'] = departments
+            
         with app.app_context():
             sync_service.sync_data()
         flash('Data synchronization started successfully!', 'success')
     except Exception as e:
         logger.error(f"Sync error: {str(e)}")
         flash(f'Error during synchronization: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/save_settings', methods=['POST'])
+def save_settings():
+    """Save application settings"""
+    try:
+        # Update sync settings if provided
+        if 'biotime_url' in request.form:
+            sync_service.BIOTIME_API_BASE_URL = request.form.get('biotime_url')
+            os.environ['BIOTIME_API_URL'] = request.form.get('biotime_url')
+            
+        if 'biotime_username' in request.form:
+            sync_service.BIOTIME_USERNAME = request.form.get('biotime_username')
+            os.environ['BIOTIME_USERNAME'] = request.form.get('biotime_username')
+            
+        if 'biotime_password' in request.form and request.form.get('biotime_password') != '********':
+            sync_service.BIOTIME_PASSWORD = request.form.get('biotime_password')
+            os.environ['BIOTIME_PASSWORD'] = request.form.get('biotime_password')
+            
+        if 'sync_interval' in request.form:
+            interval = request.form.get('sync_interval')
+            os.environ['SYNC_INTERVAL'] = interval
+            # Update scheduler if interval changed
+            if scheduler.get_job('biotime_sync'):
+                scheduler.reschedule_job(
+                    'biotime_sync', 
+                    trigger='interval', 
+                    hours=int(interval)
+                )
+                
+        if 'departments' in request.form:
+            departments = request.form.get('departments')
+            # Parse comma-separated department list
+            sync_service.DEPARTMENTS = [int(d.strip()) for d in departments.split(',') if d.strip().isdigit()]
+            os.environ['SYNC_DEPARTMENTS'] = departments
+            
+        flash('Settings saved successfully!', 'success')
+    except Exception as e:
+        logger.error(f"Error saving settings: {str(e)}")
+        flash(f'Error saving settings: {str(e)}', 'danger')
     
     return redirect(url_for('settings'))
 

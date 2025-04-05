@@ -10,33 +10,40 @@
                 <h5 class="card-title mb-0">BioTime Sync Settings</h5>
             </div>
             <div class="card-body">
-                <form action="{{ url_for('trigger_sync') }}" method="post">
+                <form action="{{ url_for('save_settings') }}" method="post">
                     <div class="mb-3">
                         <label for="biotime_url" class="form-label">BioTime API URL</label>
-                        <input type="text" class="form-control" id="biotime_url" value="http://172.16.16.13:8585/att/api/totalTimeCardReport/export/" readonly>
+                        <input type="text" class="form-control" id="biotime_url" name="biotime_url" value="{{ sync_settings.api_url }}">
                     </div>
                     
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="biotime_username" class="form-label">Username</label>
-                            <input type="text" class="form-control" id="biotime_username" value="{{ os.environ.get('BIOTIME_USERNAME', 'raghad') }}" readonly>
+                            <input type="text" class="form-control" id="biotime_username" name="biotime_username" value="{{ sync_settings.username }}">
                         </div>
                         <div class="col-md-6">
                             <label for="biotime_password" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="biotime_password" value="********" readonly>
+                            <input type="password" class="form-control" id="biotime_password" name="biotime_password" value="********" autocomplete="new-password">
+                            <div class="form-text">Leave as '********' to keep current password</div>
                         </div>
                     </div>
                     
                     <div class="mb-3">
                         <label for="sync_interval" class="form-label">Sync Interval</label>
-                        <select class="form-select" id="sync_interval">
-                            <option value="1">Every 1 hour</option>
-                            <option value="2">Every 2 hours</option>
-                            <option value="4" selected>Every 4 hours</option>
-                            <option value="6">Every 6 hours</option>
-                            <option value="12">Every 12 hours</option>
-                            <option value="24">Once daily</option>
+                        <select class="form-select" id="sync_interval" name="sync_interval">
+                            <option value="1" {% if sync_settings.interval == '1' %}selected{% endif %}>Every 1 hour</option>
+                            <option value="2" {% if sync_settings.interval == '2' %}selected{% endif %}>Every 2 hours</option>
+                            <option value="4" {% if sync_settings.interval == '4' %}selected{% endif %}>Every 4 hours</option>
+                            <option value="6" {% if sync_settings.interval == '6' %}selected{% endif %}>Every 6 hours</option>
+                            <option value="12" {% if sync_settings.interval == '12' %}selected{% endif %}>Every 12 hours</option>
+                            <option value="24" {% if sync_settings.interval == '24' %}selected{% endif %}>Once daily</option>
                         </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="departments" class="form-label">Departments to Sync (comma-separated IDs)</label>
+                        <input type="text" class="form-control" id="departments" name="departments" value="{{ sync_settings.departments }}">
+                        <div class="form-text">Example: 11,6,3,18,15,19,23,10,9,5,4,26,21</div>
                     </div>
                     
                     <div class="mb-3">
@@ -65,9 +72,12 @@
                         {% endif %}
                     </div>
                     
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-sync-alt"></i> Sync Now
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-fill">
+                            <i class="fas fa-save"></i> Save Settings
+                        </button>
+                        <button type="submit" class="btn btn-success flex-fill" formaction="{{ url_for('trigger_sync') }}">
+                            <i class="fas fa-sync-alt"></i> Save & Sync Now
                         </button>
                     </div>
                 </form>
@@ -81,86 +91,100 @@
                 <h5 class="card-title mb-0">Timesheet Settings</h5>
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <label for="default_view" class="form-label">Default View</label>
-                    <select class="form-select" id="default_view">
-                        <option value="current">Current Month</option>
-                        <option value="previous">Previous Month</option>
-                        <option value="next">Next Month</option>
-                    </select>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="weekend_days" class="form-label">Weekend Days</label>
-                    <select class="form-select" id="weekend_days" multiple>
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5" selected>Friday</option>
-                        <option value="6" selected>Saturday</option>
-                    </select>
-                    <div class="form-text">Hold Ctrl/Cmd to select multiple days</div>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Attendance Status Colors</label>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <span class="input-group-text">Present</span>
-                                <input type="color" class="form-control form-control-color" value="#28a745">
+                <form id="appearance-settings-form">
+                    <div class="mb-3">
+                        <label for="default_view" class="form-label">Default View</label>
+                        <select class="form-select" id="default_view" name="default_view">
+                            <option value="current">Current Month</option>
+                            <option value="previous">Previous Month</option>
+                            <option value="next">Next Month</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="weekend_days" class="form-label">Weekend Days</label>
+                        <select class="form-select" id="weekend_days" name="weekend_days[]" multiple>
+                            <option value="0">Sunday</option>
+                            <option value="1">Monday</option>
+                            <option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option>
+                            <option value="4">Thursday</option>
+                            <option value="5" selected>Friday</option>
+                            <option value="6" selected>Saturday</option>
+                        </select>
+                        <div class="form-text">Hold Ctrl/Cmd to select multiple days</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Attendance Status Colors</label>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">Present</span>
+                                    <input type="color" class="form-control form-control-color" id="present_color" name="present_color" value="#28a745">
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <span class="input-group-text">Absent</span>
-                                <input type="color" class="form-control form-control-color" value="#dc3545">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">Absent</span>
+                                    <input type="color" class="form-control form-control-color" id="absent_color" name="absent_color" value="#dc3545">
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <span class="input-group-text">Vacation</span>
-                                <input type="color" class="form-control form-control-color" value="#28a745">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">Vacation</span>
+                                    <input type="color" class="form-control form-control-color" id="vacation_color" name="vacation_color" value="#28a745">
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <span class="input-group-text">Transfer</span>
-                                <input type="color" class="form-control form-control-color" value="#0d6efd">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">Transfer</span>
+                                    <input type="color" class="form-control form-control-color" id="transfer_color" name="transfer_color" value="#0d6efd">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">Sick</span>
+                                    <input type="color" class="form-control form-control-color" id="sick_color" name="sick_color" value="#ffc107">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">Eid</span>
+                                    <input type="color" class="form-control form-control-color" id="eid_color" name="eid_color" value="#0dcaf0">
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">PDF Export Settings</label>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="include_logo" checked>
-                        <label class="form-check-label" for="include_logo">
-                            Include Company Logo
-                        </label>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">PDF Export Settings</label>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="include_logo" name="include_logo" checked>
+                            <label class="form-check-label" for="include_logo">
+                                Include Company Logo
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="include_legend" name="include_legend" checked>
+                            <label class="form-check-label" for="include_legend">
+                                Include Legend
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="landscape_orientation" name="landscape_orientation" checked>
+                            <label class="form-check-label" for="landscape_orientation">
+                                Landscape Orientation
+                            </label>
+                        </div>
                     </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="include_legend" checked>
-                        <label class="form-check-label" for="include_legend">
-                            Include Legend
-                        </label>
+                    
+                    <div class="d-grid">
+                        <button type="button" class="btn btn-primary" id="save-appearance-settings">
+                            <i class="fas fa-save"></i> Save Appearance Settings
+                        </button>
                     </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="landscape_orientation" checked>
-                        <label class="form-check-label" for="landscape_orientation">
-                            Landscape Orientation
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="d-grid">
-                    <button type="button" class="btn btn-primary" id="save-settings">
-                        <i class="fas fa-save"></i> Save Settings
-                    </button>
-                </div>
+                </form>
             </div>
         </div>
     </div>
@@ -205,7 +229,7 @@
                                     <td>{{ last_sync.departments_synced }}</td>
                                     <td>
                                         {% if last_sync.error_message %}
-                                            <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="tooltip" data-bs-title="{{ last_sync.error_message[:100] }}...">
+                                            <button class="btn btn-sm btn-outline-danger error-btn" type="button" data-bs-toggle="modal" data-bs-target="#errorModal" data-error="{{ last_sync.error_message }}">
                                                 View Error
                                             </button>
                                         {% else %}
@@ -223,7 +247,25 @@
                 </div>
             </div>
             <div class="card-footer text-center">
-                <button class="btn btn-sm btn-dark">View Full Sync History</button>
+                <button class="btn btn-sm btn-dark" id="view-full-history">View Full Sync History</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Modal -->
+<div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="errorModalLabel">Error Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="errorDetails" class="text-danger"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -239,17 +281,101 @@
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
         
-        // Save settings button
-        document.getElementById('save-settings').addEventListener('click', function() {
+        // Save appearance settings button
+        document.getElementById('save-appearance-settings').addEventListener('click', function() {
+            const form = document.getElementById('appearance-settings-form');
+            const formData = new FormData(form);
+            
             // In a real implementation, this would send settings to the server
-            alert('Settings saved successfully!');
+            // For now, we'll just store in localStorage
+            const settings = {};
+            for (const [key, value] of formData.entries()) {
+                if (key.endsWith('[]')) {
+                    // Handle multi-select
+                    const simpleKey = key.replace('[]', '');
+                    if (!settings[simpleKey]) settings[simpleKey] = [];
+                    settings[simpleKey].push(value);
+                } else {
+                    settings[key] = value;
+                }
+            }
+            
+            localStorage.setItem('appearance_settings', JSON.stringify(settings));
+            alert('Appearance settings saved successfully!');
+            
+            // Apply color changes
+            applyColorSettings(settings);
         });
         
-        // Sync interval change
-        document.getElementById('sync_interval').addEventListener('change', function() {
-            // In a real implementation, this would update the sync interval
-            alert(`Sync interval changed to ${this.value} hours`);
+        // Load saved appearance settings
+        const savedSettings = localStorage.getItem('appearance_settings');
+        if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            
+            // Populate form fields
+            for (const key in settings) {
+                const elements = document.getElementsByName(key + '[]');
+                if (elements.length > 0) {
+                    // Handle multi-select
+                    for (const element of elements) {
+                        element.selected = settings[key].includes(element.value);
+                    }
+                } else {
+                    const element = document.getElementById(key);
+                    if (element) {
+                        if (element.type === 'checkbox') {
+                            element.checked = settings[key] === 'on' || settings[key] === true;
+                        } else {
+                            element.value = settings[key];
+                        }
+                    }
+                }
+            }
+            
+            // Apply color settings
+            applyColorSettings(settings);
+        }
+        
+        // Error modal handling
+        document.querySelectorAll('.error-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const errorText = this.getAttribute('data-error');
+                document.getElementById('errorDetails').textContent = errorText || 'No error details available';
+            });
         });
     });
+    
+    function applyColorSettings(settings) {
+        // In a real implementation, this would update CSS variables or styles
+        console.log('Applying color settings:', settings);
+        
+        // Create or update <style> element with new color variables
+        let styleEl = document.getElementById('dynamic-colors');
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'dynamic-colors';
+            document.head.appendChild(styleEl);
+        }
+        
+        const css = `
+            :root {
+                --attendance-present-color: ${settings.present_color || '#28a745'};
+                --attendance-absent-color: ${settings.absent_color || '#dc3545'};
+                --attendance-vacation-color: ${settings.vacation_color || '#28a745'};
+                --attendance-transfer-color: ${settings.transfer_color || '#0d6efd'};
+                --attendance-sick-color: ${settings.sick_color || '#ffc107'};
+                --attendance-eid-color: ${settings.eid_color || '#0dcaf0'};
+            }
+            
+            .status-P { background-color: var(--attendance-present-color) !important; }
+            .status-A { background-color: var(--attendance-absent-color) !important; }
+            .status-V { background-color: var(--attendance-vacation-color) !important; }
+            .status-T { background-color: var(--attendance-transfer-color) !important; }
+            .status-S { background-color: var(--attendance-sick-color) !important; }
+            .status-E { background-color: var(--attendance-eid-color) !important; }
+        `;
+        
+        styleEl.innerHTML = css;
+    }
 </script>
 {% endblock %}
