@@ -72,8 +72,31 @@ def timesheet():
     # Get departments for filter dropdown
     departments = Department.query.all()
     
+    # Check if employees exist
+    employee_count = Employee.query.count()
+    logger.info(f"Total employees in database: {employee_count}")
+    
+    # Log attendance record count
+    attendance_count = AttendanceRecord.query.count()
+    logger.info(f"Total attendance records in database: {attendance_count}")
+    
     # Process and format timesheet data
-    timesheet_data = data_processor.generate_timesheet(year, month, dept_id)
+    try:
+        timesheet_data = data_processor.generate_timesheet(year, month, dept_id)
+        if timesheet_data.get('total_employees', 0) == 0:
+            logger.warning(f"No employees found for timesheet: Year={year}, Month={month}, Dept={dept_id}")
+    except Exception as e:
+        logger.error(f"Error generating timesheet: {str(e)}")
+        flash(f"Error generating timesheet: {str(e)}", "danger")
+        timesheet_data = {
+            'year': year,
+            'month': month,
+            'month_name': data_processor.get_month_name(int(month)),
+            'dates': [],
+            'employees': [],
+            'total_employees': 0,
+            'error': str(e)
+        }
     
     return render_template('timesheet.html', 
                           timesheet_data=timesheet_data,
