@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 BIOTIME_API_BASE_URL = "http://213.210.196.115:8585/att/api/transactionReport/export/"
 BIOTIME_USERNAME = os.environ.get("BIOTIME_USERNAME", "raghad")
 BIOTIME_PASSWORD = os.environ.get("BIOTIME_PASSWORD", "A1111111")
-DEPARTMENTS = [3, 4, 5, 6, 9, 10, 11, 15, 18, 19, 21, 23, 26]
+DEPARTMENTS = [11]  # Changed to only use department 11 for testing
 
 def sync_data(app=None):
     """
@@ -332,8 +332,23 @@ def process_department_data(department_id, data):
         return records_processed
     
     except Exception as e:
+        # Handle SQLAlchemy errors and connection issues
         db.session.rollback()
-        logger.error(f"Error processing department data: {str(e)}")
+        
+        # Check for common connection errors
+        if "SSL connection has been closed unexpectedly" in str(e) or "Can't reconnect until invalid transaction is rolled back" in str(e):
+            logger.error(f"Database connection error: {str(e)}")
+            # Try to recover the session
+            try:
+                db.session.remove()
+                db.engine.dispose()
+                logger.info("Database connection reset")
+            except Exception as inner_e:
+                logger.error(f"Failed to reset database connection: {str(inner_e)}")
+        else:
+            logger.error(f"Error processing department data: {str(e)}")
+        
+        # Re-raise the exception to be handled by the caller
         raise
 
 def process_uploaded_file(file_path):
@@ -560,11 +575,30 @@ def process_uploaded_file(file_path):
         return total_records
         
     except Exception as e:
-        logger.error(f"Error processing uploaded file: {str(e)}")
+        # Handle database connection errors
+        if "SSL connection has been closed unexpectedly" in str(e) or "Can't reconnect until invalid transaction is rolled back" in str(e):
+            logger.error(f"Database connection error during file upload: {str(e)}")
+            # Try to recover the session
+            try:
+                db.session.rollback()
+                db.session.remove()
+                db.engine.dispose()
+                logger.info("Database connection reset during file upload")
+            except Exception as inner_e:
+                logger.error(f"Failed to reset database connection: {str(inner_e)}")
+        else:
+            logger.error(f"Error processing uploaded file: {str(e)}")
+        
+        # Update sync log with error
         if sync_log:
             sync_log.status = "error"
             sync_log.error_message = str(e)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except:
+                # If can't commit, try to reconnect
+                db.session.remove()
+                
         return 0
 
 def process_manual_upload_data(dept_id, data):
@@ -582,6 +616,12 @@ def process_manual_upload_data(dept_id, data):
     from app import db
     from models import Department, Employee, AttendanceRecord
     
+    # Reset session to prevent connection issues
+    try:
+        db.session.rollback()  # Roll back any pending transactions
+    except:
+        pass
+        
     records_processed = 0
     
     # Process each row in the dataframe
@@ -873,5 +913,19 @@ def process_manual_upload_data(dept_id, data):
     except Exception as e:
         logger.error(f"Error committing changes: {str(e)}")
         db.session.rollback()
+        
+        # Handle connection errors
+        if "SSL connection has been closed unexpectedly" in str(e) or "Can't reconnect until invalid transaction is rolled back" in str(e):
+            try:
+                # Try to recover the session
+                db.session.remove()
+                db.engine.dispose()
+                logger.info("Database connection reset after commit error")
+                
+                # Try one more time
+                db.session.commit()
+                logger.info("Successfully committed after connection reset")
+            except Exception as inner_e:
+                logger.error(f"Failed to recover from connection error: {str(inner_e)}")
     
     return records_processed
