@@ -1,0 +1,255 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card bg-dark h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">BioTime Sync Settings</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('trigger_sync') }}" method="post">
+                    <div class="mb-3">
+                        <label for="biotime_url" class="form-label">BioTime API URL</label>
+                        <input type="text" class="form-control" id="biotime_url" value="http://172.16.16.13:8585/att/api/totalTimeCardReport/export/" readonly>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="biotime_username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="biotime_username" value="{{ os.environ.get('BIOTIME_USERNAME', 'raghad') }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="biotime_password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="biotime_password" value="********" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="sync_interval" class="form-label">Sync Interval</label>
+                        <select class="form-select" id="sync_interval">
+                            <option value="1">Every 1 hour</option>
+                            <option value="2">Every 2 hours</option>
+                            <option value="4" selected>Every 4 hours</option>
+                            <option value="6">Every 6 hours</option>
+                            <option value="12">Every 12 hours</option>
+                            <option value="24">Once daily</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Sync Status</label>
+                        <div class="d-flex align-items-center">
+                            {% if last_sync and last_sync.status == 'success' %}
+                                <span class="badge bg-success me-2"><i class="fas fa-check"></i></span>
+                                <span>Last sync successful at {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                            {% elif last_sync and last_sync.status == 'error' %}
+                                <span class="badge bg-danger me-2"><i class="fas fa-times"></i></span>
+                                <span>Last sync failed at {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                            {% elif last_sync and last_sync.status == 'partial' %}
+                                <span class="badge bg-warning me-2"><i class="fas fa-exclamation-triangle"></i></span>
+                                <span>Last sync partially successful at {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>
+                                <span>No sync data available</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if last_sync and last_sync.status != 'success' and last_sync.error_message %}
+                            <div class="alert alert-danger mt-2">
+                                <h6>Error Details:</h6>
+                                <pre class="mb-0">{{ last_sync.error_message }}</pre>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sync-alt"></i> Sync Now
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card bg-dark h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Timesheet Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="default_view" class="form-label">Default View</label>
+                    <select class="form-select" id="default_view">
+                        <option value="current">Current Month</option>
+                        <option value="previous">Previous Month</option>
+                        <option value="next">Next Month</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="weekend_days" class="form-label">Weekend Days</label>
+                    <select class="form-select" id="weekend_days" multiple>
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5" selected>Friday</option>
+                        <option value="6" selected>Saturday</option>
+                    </select>
+                    <div class="form-text">Hold Ctrl/Cmd to select multiple days</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Attendance Status Colors</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">Present</span>
+                                <input type="color" class="form-control form-control-color" value="#28a745">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">Absent</span>
+                                <input type="color" class="form-control form-control-color" value="#dc3545">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">Vacation</span>
+                                <input type="color" class="form-control form-control-color" value="#28a745">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">Transfer</span>
+                                <input type="color" class="form-control form-control-color" value="#0d6efd">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">PDF Export Settings</label>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="include_logo" checked>
+                        <label class="form-check-label" for="include_logo">
+                            Include Company Logo
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="include_legend" checked>
+                        <label class="form-check-label" for="include_legend">
+                            Include Legend
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="landscape_orientation" checked>
+                        <label class="form-check-label" for="landscape_orientation">
+                            Landscape Orientation
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="d-grid">
+                    <button type="button" class="btn btn-primary" id="save-settings">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Sync History</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                                <th>Records Synced</th>
+                                <th>Departments</th>
+                                <th>Error</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if last_sync %}
+                                <tr>
+                                    <td>{{ last_sync.id }}</td>
+                                    <td>{{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>
+                                        {% if last_sync.status == 'success' %}
+                                            <span class="badge bg-success">Success</span>
+                                        {% elif last_sync.status == 'error' %}
+                                            <span class="badge bg-danger">Error</span>
+                                        {% elif last_sync.status == 'partial' %}
+                                            <span class="badge bg-warning">Partial</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ last_sync.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ last_sync.records_synced }}</td>
+                                    <td>{{ last_sync.departments_synced }}</td>
+                                    <td>
+                                        {% if last_sync.error_message %}
+                                            <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="tooltip" data-bs-title="{{ last_sync.error_message[:100] }}...">
+                                                View Error
+                                            </button>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No sync history available</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-center">
+                <button class="btn btn-sm btn-dark">View Full Sync History</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Save settings button
+        document.getElementById('save-settings').addEventListener('click', function() {
+            // In a real implementation, this would send settings to the server
+            alert('Settings saved successfully!');
+        });
+        
+        // Sync interval change
+        document.getElementById('sync_interval').addEventListener('change', function() {
+            // In a real implementation, this would update the sync interval
+            alert(`Sync interval changed to ${this.value} hours`);
+        });
+    });
+</script>
+{% endblock %}

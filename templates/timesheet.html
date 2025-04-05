@@ -1,0 +1,182 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Monthly Timesheet{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group me-2">
+    <form id="timesheet-filter-form" class="d-flex gap-2">
+        <select class="form-select form-select-sm" id="year-select" name="year">
+            <option value="2024" {% if selected_year == '2024' %}selected{% endif %}>2024</option>
+            <option value="2025" {% if selected_year == '2025' %}selected{% endif %}>2025</option>
+        </select>
+        
+        <select class="form-select form-select-sm" id="month-select" name="month">
+            {% for i in range(1, 13) %}
+                <option value="{{ i }}" {% if selected_month|int == i %}selected{% endif %}>{{ i }} - {{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}</option>
+            {% endfor %}
+        </select>
+        
+        <select class="form-select form-select-sm" id="department-select" name="department">
+            <option value="">All Departments</option>
+            {% for dept in departments %}
+                <option value="{{ dept.id }}" {% if selected_dept|int == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+            {% endfor %}
+        </select>
+        
+        <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fas fa-filter"></i> Filter
+        </button>
+    </form>
+</div>
+
+<button class="btn btn-sm btn-success" id="export-pdf">
+    <i class="fas fa-file-pdf"></i> Export PDF
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card bg-dark mb-4">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+                Monthly Timesheet - {{ timesheet_data.month_name }} {{ timesheet_data.year }}
+            </h5>
+            <div class="small text-muted">
+                Total Employees: {{ timesheet_data.total_employees }}
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive" id="timesheet-container">
+            <table class="table table-dark table-bordered table-hover timesheet-table" id="timesheet-table">
+                <thead>
+                    <tr class="text-center">
+                        <th rowspan="2" class="text-center align-middle">C No.</th>
+                        <th rowspan="2" class="text-center align-middle">NAME</th>
+                        <th rowspan="2" class="text-center align-middle">Profession</th>
+                        
+                        <!-- Dates header -->
+                        {% for date in timesheet_data.dates %}
+                            <th class="text-center">
+                                {{ date.day }}
+                            </th>
+                        {% endfor %}
+                    </tr>
+                    <tr class="text-center">
+                        <!-- Weekday header -->
+                        {% for date in timesheet_data.dates %}
+                            <th class="text-center small">
+                                {{ date.strftime('%a') }}
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in timesheet_data.employees %}
+                        <tr>
+                            <td>{{ employee.emp_code }}</td>
+                            <td>{{ employee.name or employee.name_ar }}</td>
+                            <td>{{ employee.profession }}</td>
+                            
+                            <!-- Attendance status for each day -->
+                            {% for day in employee.attendance %}
+                                <td class="text-center attendance-cell status-{{ day.status }}">
+                                    {% if day.status == 'P' %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% elif day.status == 'A' %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% elif day.status == 'V' %}
+                                        <span class="badge rounded-pill bg-success">V</span>
+                                    {% elif day.status == 'T' %}
+                                        <span class="badge rounded-pill bg-primary">T</span>
+                                    {% elif day.status == 'S' %}
+                                        <span class="badge rounded-pill bg-warning">S</span>
+                                    {% elif day.status == 'E' %}
+                                        <span class="badge rounded-pill bg-info">E</span>
+                                    {% elif day.status == 'W' %}
+                                        <span class="text-muted">W</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="{{ 3 + timesheet_data.dates|length }}" class="text-center">
+                                No employee data available for the selected period
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="legend-item">
+                        <span class="badge rounded-pill bg-success">V</span>
+                        <span class="legend-text">Vacation</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="badge rounded-pill bg-primary">T</span>
+                        <span class="legend-text">Transfer</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="badge rounded-pill bg-danger">A</span>
+                        <span class="legend-text">Absence</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="badge rounded-pill bg-info">E</span>
+                        <span class="legend-text">Eid</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="badge rounded-pill bg-warning">S</span>
+                        <span class="legend-text">Sick</span>
+                    </div>
+                    <div class="legend-item">
+                        <i class="fas fa-check text-success"></i>
+                        <span class="legend-text">Present</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="small text-muted">
+                    Last Updated: {{ now().strftime('%Y-%m-%d %H:%M') }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/timesheet.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize timesheet filter form
+        const form = document.getElementById('timesheet-filter-form');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const year = document.getElementById('year-select').value;
+            const month = document.getElementById('month-select').value;
+            const department = document.getElementById('department-select').value;
+            
+            let url = `{{ url_for('timesheet') }}?year=${year}&month=${month}`;
+            if (department) {
+                url += `&department=${department}`;
+            }
+            
+            window.location.href = url;
+        });
+        
+        // Export to PDF button
+        document.getElementById('export-pdf').addEventListener('click', function() {
+            alert('PDF export functionality would be implemented here');
+            // In a real implementation, this would trigger a backend route that generates a PDF
+        });
+    });
+</script>
+{% endblock %}

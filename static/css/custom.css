@@ -1,0 +1,115 @@
+/* Custom CSS for Attendance Tracking System */
+
+/* Timesheet specific styles */
+.timesheet-table {
+    font-size: 0.85rem;
+}
+
+.timesheet-table th, .timesheet-table td {
+    white-space: nowrap;
+    padding: 0.5rem;
+}
+
+.timesheet-table th {
+    background-color: var(--bs-dark);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.attendance-cell {
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Status color indicators */
+.status-P {
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.status-A {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.status-V {
+    background-color: rgba(40, 167, 69, 0.2);
+}
+
+.status-T {
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.status-S {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+.status-E {
+    background-color: rgba(13, 202, 240, 0.1);
+}
+
+.status-W {
+    background-color: rgba(108, 117, 125, 0.1);
+}
+
+/* Legend items */
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.legend-text {
+    font-size: 0.875rem;
+}
+
+/* Sidebar styles */
+.sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 48px 0 0;
+    box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+}
+
+.sidebar .nav-link {
+    font-weight: 500;
+    color: var(--bs-gray-600);
+    padding: 0.75rem 1rem;
+    border-left: 3px solid transparent;
+}
+
+.sidebar .nav-link:hover {
+    color: var(--bs-primary);
+}
+
+.sidebar .nav-link.active {
+    color: var(--bs-primary);
+    border-left: 3px solid var(--bs-primary);
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.sidebar .nav-link .feather {
+    margin-right: 0.5rem;
+}
+
+/* Support for RTL text (Arabic) */
+.rtl-text {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .timesheet-table {
+        font-size: 0.75rem;
+    }
+    
+    .attendance-cell {
+        width: 30px;
+        height: 30px;
+    }
+}
