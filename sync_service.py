@@ -732,28 +732,72 @@ def process_manual_upload_data(dept_id, data):
     # Import here to avoid circular imports
     from app import db
     from models import Department, Employee, AttendanceRecord
+    from sqlalchemy import exc as sqlalchemy_exc
     
     # Reset session to prevent connection issues
     try:
         db.session.rollback()  # Roll back any pending transactions
-    except:
-        pass
+        # Test connection
+        db.engine.connect().close()
+        logger.info("Database connection confirmed before processing")
+    except Exception as db_e:
+        logger.error(f"Database connection issue at start of processing: {str(db_e)}")
+        try:
+            # Try to recover
+            db.session.remove()
+            db.engine.dispose()
+            # Reconnect
+            db.engine.connect().close()
+            logger.info("Database connection reset successfully")
+        except Exception as reset_e:
+            logger.error(f"Failed to reset database connection: {str(reset_e)}")
+            raise
         
     records_processed = 0
     
-    # Process each row in the dataframe
-    for _, row in data.iterrows():
+    # First make sure department exists
+    try:
+        dept = Department.query.filter_by(dept_id=str(dept_id)).first()
+        if not dept:
+            # Create department
+            dept_name = f"Department {dept_id}"
+            dept = Department(dept_id=str(dept_id), name=dept_name, active=True)
+            db.session.add(dept)
+            db.session.commit()
+            logger.info(f"Created new department: {dept_name}")
+    except sqlalchemy_exc.SQLAlchemyError as dept_e:
+        logger.error(f"Error creating department: {str(dept_e)}")
+        db.session.rollback()
+        # Try one more time
         try:
-            # Get employee code - check all possible column names
+            dept = Department.query.filter_by(dept_id=str(dept_id)).first()
+            if not dept:
+                # Create department with different approach
+                dept_name = f"Department {dept_id}"
+                dept = Department(dept_id=str(dept_id), name=dept_name, active=True)
+                db.session.add(dept)
+                db.session.commit()
+                logger.info(f"Created new department after retry: {dept_name}")
+        except Exception as retry_e:
+            logger.error(f"Failed to create department after retry: {str(retry_e)}")
+            # Continue with dept as None - will be handled later
+    
+    # Improved column checking for employee code
+    # Process each row in the dataframe
+    for index, row in data.iterrows():
+        try:
+            # Get employee code - check all possible column names and handle different formats
             emp_code = None
-            for col_name in ['emp_code', 'employee_code', 'employee id']:
-                if col_name in row and row[col_name]:
-                    emp_code = str(row[col_name])
+            # Check common column names for employee code
+            for col_name in ['emp_code', 'C. No.', 'employee_code', 'employee id', 'id', 'emp id', 'code']:
+                if col_name in data.columns and pd.notna(row[col_name]):
+                    emp_code = str(row[col_name]).strip()
                     break
             
+            # If still no emp_code, try to use index as code
             if not emp_code:
-                logger.warning("Skipping row: No employee code found")
-                continue
+                emp_code = f"EMP{index:04d}"
+                logger.warning(f"No employee code found for row {index}, using generated code: {emp_code}")
                 
             # Get or create employee
             employee = Employee.query.filter_by(emp_code=emp_code).first()
