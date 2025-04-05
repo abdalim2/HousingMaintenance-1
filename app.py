@@ -188,6 +188,50 @@ def save_settings():
         flash(f'Error saving settings: {str(e)}', 'danger')
     
     return redirect(url_for('settings'))
+    
+@app.route('/upload_sync', methods=['POST'])
+def upload_sync():
+    """Handle file upload for manual sync"""
+    try:
+        # Check if file was uploaded
+        if 'sync_file' not in request.files:
+            flash('No file selected', 'danger')
+            return redirect(url_for('settings'))
+            
+        file = request.files['sync_file']
+        
+        # Check if file was selected
+        if file.filename == '':
+            flash('No file selected', 'danger')
+            return redirect(url_for('settings'))
+            
+        # Check if file has allowed extension
+        if not file.filename.endswith('.txt'):
+            flash('Only .txt files are allowed', 'danger')
+            return redirect(url_for('settings'))
+            
+        # Save the file temporarily
+        temp_path = os.path.join(os.getcwd(), 'temp_sync_file.txt')
+        file.save(temp_path)
+        
+        # Process file with sync service
+        with app.app_context():
+            records = sync_service.process_uploaded_file(temp_path)
+            
+        # Remove temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
+        if records > 0:
+            flash(f'Successfully processed {records} records from uploaded file', 'success')
+        else:
+            flash('No records were processed from the uploaded file', 'warning')
+            
+    except Exception as e:
+        logger.error(f"Error processing uploaded file: {str(e)}")
+        flash(f'Error processing uploaded file: {str(e)}', 'danger')
+        
+    return redirect(url_for('settings'))
 
 # Setup scheduled task for data synchronization
 def initialize_scheduler():

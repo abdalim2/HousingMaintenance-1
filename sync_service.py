@@ -249,6 +249,77 @@ def process_department_data(department_id, data):
         logger.error(f"Error processing department data: {str(e)}")
         raise
 
+def process_uploaded_file(file_path):
+    """
+    Process an uploaded file containing attendance data
+    
+    Args:
+        file_path: Path to the uploaded file
+        
+    Returns:
+        Number of records processed
+    """
+    # Import here to avoid circular imports
+    from app import db
+    from models import Department, Employee, AttendanceRecord, SyncLog
+    
+    total_records = 0
+    
+    try:
+        # Read data from file
+        data = pd.read_csv(file_path, sep='\t', encoding='utf-8')
+        
+        if data.empty:
+            logger.warning("Uploaded file contains no data")
+            return 0
+            
+        # Create sync log entry
+        sync_log = SyncLog(
+            sync_time=datetime.utcnow(),
+            status="in_progress",
+            departments_synced="Manual upload"
+        )
+        db.session.add(sync_log)
+        db.session.commit()
+        
+        # Process data for each department
+        department_records = {}
+        errors = []
+        
+        for dept_id in DEPARTMENTS:
+            try:
+                records = process_department_data(dept_id, data)
+                if records > 0:
+                    department_records[dept_id] = records
+                    total_records += records
+            except Exception as e:
+                error_msg = f"Error processing department {dept_id} from uploaded file: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                
+        # Update sync log
+        if sync_log:
+            sync_log.status = "success" if not errors else "partial"
+            sync_log.records_synced = total_records
+            
+            if department_records:
+                departments_str = ", ".join([f"Dept {dept_id}: {count} records" for dept_id, count in department_records.items()])
+                sync_log.departments_synced = f"Manual upload - {departments_str}"
+            
+            sync_log.error_message = "\n".join(errors) if errors else None
+            db.session.commit()
+        
+        logger.info(f"Manual sync completed: {total_records} records processed from uploaded file")
+        return total_records
+        
+    except Exception as e:
+        logger.error(f"Error processing uploaded file: {str(e)}")
+        if 'sync_log' in locals() and sync_log:
+            sync_log.status = "error"
+            sync_log.error_message = str(e)
+            db.session.commit()
+        return 0
+
 def sync_data(app=None):
     """
     Sync attendance data from BioTime

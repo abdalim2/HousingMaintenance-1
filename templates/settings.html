@@ -86,7 +86,37 @@
     </div>
     
     <div class="col-md-6 mb-4">
-        <div class="card bg-dark h-100">
+        <div class="card bg-dark">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Manual Sync</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('upload_sync') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="sync_file" class="form-label">Upload Data File</label>
+                        <input class="form-control" type="file" id="sync_file" name="sync_file" accept=".txt">
+                        <div class="form-text">Upload a tab-separated text file exported from BioTime with the same format as the API response.</div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> File Requirements:</h6>
+                        <ul class="mb-0">
+                            <li>File must be in <strong>.txt</strong> format with <strong>tab-separated</strong> values</li>
+                            <li>Must include headers: <code>emp_code</code>, <code>first_name</code>, <code>dept_name</code>, <code>att_date</code>, <code>punch_time</code>, <code>punch_state</code>, <code>source</code></li>
+                            <li>The file format should match the BioTime API export format</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload & Process File
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card bg-dark mt-3">
             <div class="card-header">
                 <h5 class="card-title mb-0">Timesheet Settings</h5>
             </div>
@@ -154,28 +184,6 @@
                                     <input type="color" class="form-control form-control-color" id="eid_color" name="eid_color" value="#0dcaf0">
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">PDF Export Settings</label>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="include_logo" name="include_logo" checked>
-                            <label class="form-check-label" for="include_logo">
-                                Include Company Logo
-                            </label>
-                        </div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="include_legend" name="include_legend" checked>
-                            <label class="form-check-label" for="include_legend">
-                                Include Legend
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="landscape_orientation" name="landscape_orientation" checked>
-                            <label class="form-check-label" for="landscape_orientation">
-                                Landscape Orientation
-                            </label>
                         </div>
                     </div>
                     
@@ -342,6 +350,20 @@
                 const errorText = this.getAttribute('data-error');
                 document.getElementById('errorDetails').textContent = errorText || 'No error details available';
             });
+        });
+        
+        // File upload validation
+        document.getElementById('sync_file').addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                if (!file.name.endsWith('.txt')) {
+                    alert('Please select a .txt file only');
+                    this.value = '';
+                } else if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                    alert('File size exceeds 10MB limit');
+                    this.value = '';
+                }
+            }
         });
     });
     
