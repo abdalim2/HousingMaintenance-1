@@ -10,10 +10,10 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 # BioTime API configuration
-BIOTIME_API_BASE_URL = "http://172.16.16.13:8585/att/api/totalTimeCardReport/export/"
+BIOTIME_API_BASE_URL = "http://213.210.196.115:8585/att/api/transactionReport/export/"
 BIOTIME_USERNAME = os.environ.get("BIOTIME_USERNAME", "raghad")
 BIOTIME_PASSWORD = os.environ.get("BIOTIME_PASSWORD", "A1111111")
-DEPARTMENTS = [11, 6, 3, 18, 15, 19, 23, 10, 9, 5, 4, 26, 21]
+DEPARTMENTS = [3, 4, 5, 6, 9, 10, 11, 15, 18, 19, 21, 23, 26]
 
 def fetch_biotime_data(department_id, start_date, end_date):
     """
@@ -27,16 +27,22 @@ def fetch_biotime_data(department_id, start_date, end_date):
     Returns:
         DataFrame containing attendance data
     """
+    # Format dates with time for the new API
+    start_datetime = f"{start_date} 00:00:00"
+    end_datetime = f"{end_date} 23:59:59"
+    
+    # For transaction report API, we need to use all departments in one request
+    departments_str = ",".join(str(d) for d in DEPARTMENTS)
+    
     params = {
-        "export_headers": "emp_code,dept_name,att_date,weekday,att_exception,terminal_alias_in,clock_in,clock_out,total_time",
-        "start_date": start_date,
-        "end_date": end_date,
-        "departments": department_id,
+        "export_headers": "emp_code,first_name,dept_name,att_date,punch_time,punch_state,source",
+        "start_date": start_datetime,
+        "end_date": end_datetime,
+        "departments": departments_str,
         "employees": -1,
         "page_size": 999999,
         "export_type": "txt",
         "page": 1,
-        "export_style": "",
         "limit": 999999
     }
     
@@ -86,67 +92,112 @@ def process_department_data(department_id, data):
     from models import Department, Employee, AttendanceRecord
     
     try:
+        # Filter data by department_id
+        dept_data = data[data['dept_name'].str.contains(f"Department {department_id}", na=False)] if 'dept_name' in data.columns else data
+        
+        if dept_data.empty:
+            logger.warning(f"No data available for department {department_id}")
+            return 0
+        
         # First ensure department exists
         dept = Department.query.filter_by(dept_id=str(department_id)).first()
-        if not dept and not data.empty:
-            # Get department name from the first row
-            dept_name = data['dept_name'].iloc[0] if 'dept_name' in data.columns else f"Department {department_id}"
+        if not dept:
+            # Get department name from the data
+            dept_name = dept_data['dept_name'].iloc[0] if 'dept_name' in dept_data.columns else f"Department {department_id}"
             dept = Department(dept_id=str(department_id), name=dept_name, active=True)
             db.session.add(dept)
             db.session.commit()
             logger.info(f"Created new department: {dept_name} (ID: {department_id})")
         
-        # Process each record
+        # Group the data by employee and date
+        employee_records = {}
+        
+        # Process each transaction record and group by employee and date
+        for _, row in dept_data.iterrows():
+            try:
+                # Get or create employee
+                emp_code = str(row['emp_code'])
+                
+                # Create record key (employee_code + date)
+                att_date = datetime.strptime(row['att_date'], '%Y-%m-%d').date() if 'att_date' in row else None
+                if not att_date:
+                    continue
+                    
+                record_key = f"{emp_code}_{att_date.isoformat()}"
+                
+                # Determine punch type
+                punch_state = row.get('punch_state', '').lower() if pd.notna(row.get('punch_state')) else ''
+                punch_time = row.get('punch_time') if pd.notna(row.get('punch_time')) else None
+                
+                if not punch_time:
+                    continue
+                    
+                # Initialize record if it doesn't exist
+                if record_key not in employee_records:
+                    employee_records[record_key] = {
+                        'emp_code': emp_code,
+                        'date': att_date,
+                        'first_name': row.get('first_name', '') if pd.notna(row.get('first_name')) else '',
+                        'dept_name': row.get('dept_name', '') if pd.notna(row.get('dept_name')) else '',
+                        'source': row.get('source', '') if pd.notna(row.get('source')) else '',
+                        'clock_in': None,
+                        'clock_out': None,
+                        'weekday': att_date.strftime('%A')  # Get weekday name
+                    }
+                
+                # Parse punch time 
+                try:
+                    punch_datetime = datetime.strptime(f"{row['att_date']} {punch_time}", '%Y-%m-%d %H:%M:%S')
+                    
+                    # Determine if this is clock in or clock out
+                    if 'in' in punch_state:
+                        # Set as clock in if it's earlier than current clock in or if no clock in exists
+                        if employee_records[record_key]['clock_in'] is None or punch_datetime < employee_records[record_key]['clock_in']:
+                            employee_records[record_key]['clock_in'] = punch_datetime
+                    elif 'out' in punch_state:
+                        # Set as clock out if it's later than current clock out or if no clock out exists
+                        if employee_records[record_key]['clock_out'] is None or punch_datetime > employee_records[record_key]['clock_out']:
+                            employee_records[record_key]['clock_out'] = punch_datetime
+                except Exception as e:
+                    logger.error(f"Error parsing punch time: {str(e)}")
+                    continue
+                
+            except Exception as e:
+                logger.error(f"Error processing transaction record: {str(e)}")
+                continue
+        
+        # Process the aggregated records
         records_processed = 0
         
-        for _, row in data.iterrows():
-            # Get or create employee
-            emp_code = str(row['emp_code'])
-            employee = Employee.query.filter_by(emp_code=emp_code).first()
-            
-            if not employee:
-                # Create new employee
-                employee = Employee(
-                    emp_code=emp_code,
-                    name=row.get('name', ''),  # This might be missing in the data
-                    department_id=dept.id if dept else None
-                )
-                db.session.add(employee)
-                db.session.commit()
-            
-            # Parse date and attendance data
+        for record_key, record_data in employee_records.items():
             try:
-                att_date = datetime.strptime(row['att_date'], '%Y-%m-%d').date()
+                emp_code = record_data['emp_code']
+                att_date = record_data['date']
                 
-                # Determine attendance status based on exception
+                # Get or create employee
+                employee = Employee.query.filter_by(emp_code=emp_code).first()
+                if not employee:
+                    # Create new employee
+                    employee = Employee(
+                        emp_code=emp_code,
+                        name=record_data.get('first_name', ''),
+                        department_id=dept.id if dept else None
+                    )
+                    db.session.add(employee)
+                    db.session.commit()
+                
+                # Calculate total time if both clock in and clock out exist
+                total_time = ''
+                if record_data['clock_in'] and record_data['clock_out']:
+                    time_diff = record_data['clock_out'] - record_data['clock_in']
+                    hours, remainder = divmod(time_diff.seconds, 3600)
+                    minutes, _ = divmod(remainder, 60)
+                    total_time = f"{hours:02d}:{minutes:02d}"
+                
+                # Determine attendance status
                 status = 'P'  # Default to Present
-                if pd.notna(row.get('att_exception')):
-                    exception = row['att_exception'].lower()
-                    if 'absent' in exception:
-                        status = 'A'  # Absence
-                    elif 'vacation' in exception:
-                        status = 'V'  # Vacation
-                    elif 'transfer' in exception:
-                        status = 'T'  # Transfer
-                    elif 'sick' in exception:
-                        status = 'S'  # Sick
-                    elif 'eid' in exception:
-                        status = 'E'  # Eid
-                
-                # Parse clock in/out times
-                clock_in = None
-                if pd.notna(row.get('clock_in')):
-                    try:
-                        clock_in = datetime.strptime(f"{row['att_date']} {row['clock_in']}", '%Y-%m-%d %H:%M:%S')
-                    except:
-                        pass
-                
-                clock_out = None
-                if pd.notna(row.get('clock_out')):
-                    try:
-                        clock_out = datetime.strptime(f"{row['att_date']} {row['clock_out']}", '%Y-%m-%d %H:%M:%S')
-                    except:
-                        pass
+                if not record_data['clock_in'] and not record_data['clock_out']:
+                    status = 'A'  # Absent if no clock in/out
                 
                 # Check if attendance record already exists for this employee and date
                 attendance = AttendanceRecord.query.filter_by(
@@ -156,26 +207,24 @@ def process_department_data(department_id, data):
                 
                 if attendance:
                     # Update existing record
-                    attendance.clock_in = clock_in
-                    attendance.clock_out = clock_out
-                    attendance.total_time = row.get('total_time', '')
-                    attendance.weekday = row.get('weekday', '')
+                    attendance.clock_in = record_data['clock_in']
+                    attendance.clock_out = record_data['clock_out']
+                    attendance.total_time = total_time
+                    attendance.weekday = record_data['weekday']
                     attendance.attendance_status = status
-                    attendance.exception = row.get('att_exception', '')
-                    attendance.terminal_alias_in = row.get('terminal_alias_in', '')
+                    attendance.terminal_alias_in = record_data.get('source', '')
                     attendance.updated_at = datetime.utcnow()
                 else:
                     # Create new attendance record
                     attendance = AttendanceRecord(
                         employee_id=employee.id,
                         date=att_date,
-                        weekday=row.get('weekday', ''),
-                        clock_in=clock_in,
-                        clock_out=clock_out,
-                        total_time=row.get('total_time', ''),
+                        weekday=record_data['weekday'],
+                        clock_in=record_data['clock_in'],
+                        clock_out=record_data['clock_out'],
+                        total_time=total_time,
                         attendance_status=status,
-                        terminal_alias_in=row.get('terminal_alias_in', ''),
-                        exception=row.get('att_exception', '')
+                        terminal_alias_in=record_data.get('source', '')
                     )
                     db.session.add(attendance)
                 
@@ -242,25 +291,27 @@ def sync_data(app=None):
         db.session.add(sync_log)
         db.session.commit()
         
-        # Process each department
-        for dept_id in DEPARTMENTS:
-            try:
-                # Fetch data from BioTime
-                data = fetch_biotime_data(dept_id, start_date_str, end_date_str)
-                
-                if data is not None and not data.empty:
+        # Fetch all data in one request
+        data = fetch_biotime_data(None, start_date_str, end_date_str)
+        
+        if data is not None and not data.empty:
+            # Process data for each department
+            for dept_id in DEPARTMENTS:
+                try:
                     # Process the data
                     records = process_department_data(dept_id, data)
                     total_records += records
-                    synced_depts.append(str(dept_id))
-                    logger.info(f"Successfully synced department {dept_id} - {records} records")
-                else:
-                    logger.warning(f"No data available for department {dept_id}")
-            
-            except Exception as e:
-                error_msg = f"Error syncing department {dept_id}: {str(e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
+                    if records > 0:
+                        synced_depts.append(str(dept_id))
+                        logger.info(f"Successfully synced department {dept_id} - {records} records")
+                except Exception as e:
+                    error_msg = f"Error processing department {dept_id}: {str(e)}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+        else:
+            error_msg = "No data fetched from BioTime API"
+            logger.error(error_msg)
+            errors.append(error_msg)
         
         # Update sync log
         if sync_log:
