@@ -67,3 +67,15 @@ class SyncLog(db.Model):
     
     def __repr__(self):
         return f'<SyncLog {self.sync_time} - {self.status}>'
+
+class MonthPeriod(db.Model):
+    """Model for storing monthly period definitions based on company calendar"""
+    id = db.Column(db.Integer, primary_key=True)
+    month_code = db.Column(db.String(10), nullable=False)  # Format: MM/YY (e.g., 01/25)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    days_in_month = db.Column(db.Integer, nullable=False)
+    hours_in_month = db.Column(db.Integer, nullable=False)
+    
+    def __repr__(self):
+        return f'<MonthPeriod {self.month_code}: {self.start_date} - {self.end_date}>'

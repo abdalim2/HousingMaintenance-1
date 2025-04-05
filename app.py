@@ -36,8 +36,17 @@ db.init_app(app)
 # Import models after db initialization to avoid circular imports
 with app.app_context():
     # Import models here
-    from models import Department, Employee, AttendanceRecord, SyncLog
+    from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod
     db.create_all()
+    
+    # Initialize month periods if the table is empty
+    if MonthPeriod.query.count() == 0:
+        try:
+            from initialize_months import initialize_month_periods
+            initialize_month_periods()
+            logger.info("Successfully initialized month periods")
+        except Exception as e:
+            logger.error(f"Error initializing month periods: {str(e)}")
 
 # Import services after models
 import data_processor

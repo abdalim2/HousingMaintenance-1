@@ -20,22 +20,71 @@ def get_month_name(month_num):
     return calendar.month_name[int(month_num)]
 
 def get_month_days(year, month):
-    """Get number of days in month"""
-    return calendar.monthrange(int(year), int(month))[1]
-
-def get_month_start_end_dates(year, month):
-    """Get start and end dates for a month"""
+    """
+    Get number of days in month based on company's fiscal calendar
+    
+    Args:
+        year: Year as integer or string
+        month: Month as integer or string
+    
+    Returns:
+        Number of days in the month
+    """
+    # Import here to avoid circular imports
+    from models import MonthPeriod
+    
     year = int(year)
     month = int(month)
     
-    # First day of the month
-    start_date = date(year, month, 1)
+    # Format month code to MM/YY format (e.g., "01/25" for January 2025)
+    month_code = f"{month:02d}/{str(year)[2:4]}"
     
-    # Last day of the month
-    _, last_day = calendar.monthrange(year, month)
-    end_date = date(year, month, last_day)
+    # Try to find month period in the database
+    month_period = MonthPeriod.query.filter_by(month_code=month_code).first()
     
-    return start_date, end_date
+    if month_period:
+        # If found in database, use the days_in_month field
+        return month_period.days_in_month
+    else:
+        # Fallback to standard calendar if not found
+        return calendar.monthrange(year, month)[1]
+
+def get_month_start_end_dates(year, month):
+    """
+    Get start and end dates for a month based on company's fiscal calendar
+    
+    Args:
+        year: Year as integer or string
+        month: Month as integer or string
+    
+    Returns:
+        Tuple of (start_date, end_date) for the month
+    """
+    # Import here to avoid circular imports
+    from models import MonthPeriod
+    
+    year = int(year)
+    month = int(month)
+    
+    # Format month code to MM/YY format (e.g., "01/25" for January 2025)
+    month_code = f"{month:02d}/{str(year)[2:4]}"
+    
+    # Try to find month period in the database
+    month_period = MonthPeriod.query.filter_by(month_code=month_code).first()
+    
+    if month_period:
+        # If found in database, use the defined period
+        return month_period.start_date, month_period.end_date
+    else:
+        # Fallback to standard calendar if not found
+        # First day of the month
+        start_date = date(year, month, 1)
+        
+        # Last day of the month
+        _, last_day = calendar.monthrange(year, month)
+        end_date = date(year, month, last_day)
+        
+        return start_date, end_date
 
 def get_previous_month_days(year, month, num_days=5):
     """Get the last few days of the previous month"""
@@ -153,6 +202,18 @@ def generate_timesheet(year, month, department_id=None):
                 'attendance': attendance_data
             })
         
+        # Get month period data if available
+        from models import MonthPeriod
+        month_code = f"{int(month):02d}/{str(int(year))[2:4]}"
+        month_period = MonthPeriod.query.filter_by(month_code=month_code).first()
+        
+        working_days = None
+        working_hours = None
+        
+        if month_period:
+            working_days = month_period.days_in_month
+            working_hours = month_period.hours_in_month
+            
         # Build and return timesheet data
         timesheet_data = {
             'year': year,
@@ -160,7 +221,11 @@ def generate_timesheet(year, month, department_id=None):
             'month_name': get_month_name(month),
             'dates': dates,
             'employees': employee_rows,
-            'total_employees': len(employee_rows)
+            'total_employees': len(employee_rows),
+            'start_date': start_date,
+            'end_date': end_date,
+            'working_days': working_days,
+            'working_hours': working_hours
         }
         
         return timesheet_data
@@ -175,6 +240,10 @@ def generate_timesheet(year, month, department_id=None):
             'dates': [],
             'employees': [],
             'total_employees': 0,
+            'start_date': None,
+            'end_date': None,
+            'working_days': None,
+            'working_hours': None,
             'error': str(e)
         }
 

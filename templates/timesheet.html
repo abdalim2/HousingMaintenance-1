@@ -41,8 +41,10 @@
             <h5 class="card-title mb-0">
                 Monthly Timesheet - {{ timesheet_data.month_name }} {{ timesheet_data.year }}
             </h5>
-            <div class="small text-muted">
-                Total Employees: {{ timesheet_data.total_employees }}
+            <div class="small text-muted text-end">
+                <div>Period: {{ timesheet_data.start_date.strftime('%d/%m/%Y') if timesheet_data.start_date else 'N/A' }} - {{ timesheet_data.end_date.strftime('%d/%m/%Y') if timesheet_data.end_date else 'N/A' }}</div>
+                <div>Total Employees: {{ timesheet_data.total_employees }}</div>
+                {% if timesheet_data.working_days %}<div>Working Days: {{ timesheet_data.working_days }} ({{ timesheet_data.working_hours }} hours)</div>{% endif %}
             </div>
         </div>
     </div>
