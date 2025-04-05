@@ -15,6 +15,93 @@ BIOTIME_USERNAME = os.environ.get("BIOTIME_USERNAME", "raghad")
 BIOTIME_PASSWORD = os.environ.get("BIOTIME_PASSWORD", "A1111111")
 DEPARTMENTS = [3, 4, 5, 6, 9, 10, 11, 15, 18, 19, 21, 23, 26]
 
+def sync_data(app=None):
+    """
+    Sync attendance data from BioTime
+    
+    Args:
+        app: Flask application instance (for creating application context)
+    """
+    # Import here to avoid circular imports
+    from app import db
+    from models import Department, Employee, AttendanceRecord, SyncLog
+    
+    # Get app context if provided
+    ctx = None
+    if app:
+        ctx = app.app_context()
+        ctx.push()
+    
+    total_records = 0
+    errors = []
+    synced_depts = []
+    sync_log = None
+    
+    # Calculate date range (past month to current date)
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=30)
+    
+    # Format dates for API
+    start_date_str = start_date.strftime('%Y-%m-%d')
+    end_date_str = end_date.strftime('%Y-%m-%d')
+    
+    logger.info(f"Starting BioTime data sync from {start_date_str} to {end_date_str}")
+    
+    try:
+        # Create sync log entry
+        sync_log = SyncLog(
+            sync_time=datetime.utcnow(),
+            status="in_progress",
+            departments_synced=",".join(str(d) for d in DEPARTMENTS)
+        )
+        db.session.add(sync_log)
+        db.session.commit()
+        
+        # Fetch all data in one request
+        data = fetch_biotime_data(None, start_date_str, end_date_str)
+        
+        if data is not None and not data.empty:
+            # Process data for each department
+            for dept_id in DEPARTMENTS:
+                try:
+                    # Process the data
+                    records = process_department_data(dept_id, data)
+                    total_records += records
+                    if records > 0:
+                        synced_depts.append(str(dept_id))
+                        logger.info(f"Successfully synced department {dept_id} - {records} records")
+                except Exception as e:
+                    error_msg = f"Error processing department {dept_id}: {str(e)}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+        else:
+            error_msg = "No data fetched from BioTime API"
+            logger.error(error_msg)
+            errors.append(error_msg)
+        
+        # Update sync log
+        if sync_log:
+            sync_log.status = "success" if not errors else "partial"
+            sync_log.records_synced = total_records
+            sync_log.departments_synced = ",".join(synced_depts)
+            sync_log.error_message = "\n".join(errors) if errors else None
+            db.session.commit()
+        
+        logger.info(f"Data sync completed: {total_records} records synced")
+    
+    except Exception as e:
+        logger.error(f"Sync process failed: {str(e)}")
+        if sync_log:
+            sync_log.status = "error"
+            sync_log.error_message = str(e)
+            db.session.commit()
+    
+    finally:
+        # Clean up app context if it was pushed
+        if ctx:
+            ctx.pop()
+
+
 def fetch_biotime_data(department_id, start_date, end_date):
     """
     Fetch attendance data from BioTime API for a specific department
@@ -349,20 +436,50 @@ def process_uploaded_file(file_path):
             
             # Try to map common column names
             column_mapping = {}
+            
+            # Check all possible column name variations
             for col in data.columns:
                 col_lower = col.lower()
-                if 'emp' in col_lower and 'code' in col_lower and 'emp_code' not in data.columns:
+                
+                # Employee code mapping
+                if any(term in col_lower for term in ['employee id', 'emp id', 'emp_id', 'empid', 'employee code', 'emp code', 'emp_code', 'empcode']) and 'emp_code' not in data.columns:
                     column_mapping[col] = 'emp_code'
-                elif 'employee' in col_lower and 'code' in col_lower and 'emp_code' not in data.columns:
-                    column_mapping[col] = 'emp_code'
-                elif 'date' in col_lower and 'att_date' not in data.columns:
+                
+                # Date mapping - avoid mapping weekday as date
+                elif 'date' in col_lower and 'weekday' not in col_lower and 'att_date' not in data.columns:
                     column_mapping[col] = 'att_date'
-                elif 'time' in col_lower and 'punch_time' not in data.columns:
-                    column_mapping[col] = 'punch_time'
-                elif 'name' in col_lower and 'first_name' not in data.columns:
-                    column_mapping[col] = 'first_name'
-                elif 'dept' in col_lower and 'dept_name' not in data.columns:
+                
+                # Department mapping
+                elif any(term in col_lower for term in ['dept', 'department', 'division']) and 'dept_name' not in data.columns:
                     column_mapping[col] = 'dept_name'
+                
+                # Name mapping
+                elif any(term in col_lower for term in ['employee name', 'emp name', 'emp_name', 'empname', 'name']) and not any(x in col_lower for x in ['dept', 'first', 'last', 'device']) and 'first_name' not in data.columns:
+                    column_mapping[col] = 'first_name'
+                
+                # Clock in mapping
+                elif any(term in col_lower for term in ['clock in', 'clock-in', 'clockin', 'time in', 'timein', 'in time']) and 'clock_in' not in data.columns:
+                    column_mapping[col] = 'clock_in'
+                    
+                # Clock out mapping
+                elif any(term in col_lower for term in ['clock out', 'clock-out', 'clockout', 'time out', 'timeout', 'out time']) and 'clock_out' not in data.columns:
+                    column_mapping[col] = 'clock_out'
+                    
+                # Punch time (only if separate clock in/out not available)
+                elif any(term in col_lower for term in ['punch time', 'punch_time', 'punchtime']) and 'punch_time' not in data.columns:
+                    column_mapping[col] = 'punch_time'
+                    
+                # Exception/Status mapping
+                elif any(term in col_lower for term in ['exception', 'status', 'state', 'attendance status']) and 'attendance_status' not in data.columns:
+                    column_mapping[col] = 'attendance_status'
+                
+                # Device/Terminal mapping
+                elif any(term in col_lower for term in ['device', 'terminal', 'location']) and 'in' in col_lower and 'terminal_alias_in' not in data.columns:
+                    column_mapping[col] = 'terminal_alias_in'
+                    
+                # Total time mapping
+                elif any(term in col_lower for term in ['total time', 'total_time', 'totaltime', 'hours worked', 'worked time']) and 'total_time' not in data.columns:
+                    column_mapping[col] = 'total_time'
             
             # Apply mappings
             if column_mapping:
@@ -470,12 +587,12 @@ def process_manual_upload_data(dept_id, data):
     # Process each row in the dataframe
     for _, row in data.iterrows():
         try:
-            # Get employee code
+            # Get employee code - check all possible column names
             emp_code = None
-            if 'emp_code' in row:
-                emp_code = str(row['emp_code'])
-            elif 'employee_code' in row:
-                emp_code = str(row['employee_code'])
+            for col_name in ['emp_code', 'employee_code', 'employee id']:
+                if col_name in row and row[col_name]:
+                    emp_code = str(row[col_name])
+                    break
             
             if not emp_code:
                 logger.warning("Skipping row: No employee code found")
@@ -484,18 +601,17 @@ def process_manual_upload_data(dept_id, data):
             # Get or create employee
             employee = Employee.query.filter_by(emp_code=emp_code).first()
             if not employee:
-                # Try to get employee name
+                # Try to get employee name from any available column
                 name = None
-                if 'first_name' in row and 'last_name' in row:
-                    name = f"{row['first_name']} {row['last_name']}"
-                elif 'first_name' in row:
-                    name = row['first_name']
-                elif 'name' in row:
-                    name = row['name']
+                for col_name in ['first_name', 'name', 'Employee Name']:
+                    if col_name in row and row[col_name]:
+                        name = str(row[col_name])
+                        break
                 
                 if not name:
-                    logger.warning(f"Skipping row: No name found for employee {emp_code}")
-                    continue
+                    # If name not found, use employee code as name
+                    name = f"Employee {emp_code}"
+                    logger.warning(f"No name found for employee {emp_code}, using code as name")
                     
                 # Get department if not specified
                 department_id = None
@@ -504,17 +620,31 @@ def process_manual_upload_data(dept_id, data):
                     if dept:
                         department_id = dept.id
                 else:
-                    # Try to get department from data
+                    # Try to get department from data - check all possible column names
                     dept_name = None
-                    if 'dept_name' in row:
-                        dept_name = row['dept_name']
-                    elif 'department' in row:
-                        dept_name = row['department']
+                    for col_name in ['dept_name', 'department', 'Department']:
+                        if col_name in row and row[col_name]:
+                            dept_name = str(row[col_name])
+                            break
                     
                     if dept_name:
                         dept = Department.query.filter(Department.name.ilike(f"%{dept_name}%")).first()
                         if dept:
                             department_id = dept.id
+                        else:
+                            # If department not found, create it
+                            try:
+                                new_dept = Department(
+                                    dept_id=dept_name.strip(),
+                                    name=dept_name.strip(),
+                                    active=True
+                                )
+                                db.session.add(new_dept)
+                                db.session.flush()
+                                department_id = new_dept.id
+                                logger.info(f"Created new department: {dept_name}")
+                            except Exception as e:
+                                logger.warning(f"Could not create department '{dept_name}': {str(e)}")
                 
                 # Create new employee
                 employee = Employee(
@@ -525,12 +655,12 @@ def process_manual_upload_data(dept_id, data):
                 db.session.add(employee)
                 db.session.flush()  # Get ID without committing
             
-            # Get attendance date
+            # Get attendance date - check all possible column names
             att_date = None
-            if 'att_date' in row:
-                att_date = row['att_date']
-            elif 'date' in row:
-                att_date = row['date']
+            for col_name in ['att_date', 'date', 'Date']:
+                if col_name in row and row[col_name]:
+                    att_date = row[col_name]
+                    break
                 
             if not att_date:
                 logger.warning(f"Skipping row: No date found for employee {emp_code}")
@@ -564,49 +694,90 @@ def process_manual_upload_data(dept_id, data):
                 date=parsed_date
             ).first()
             
+            # Functions to parse time
+            def parse_time(time_str):
+                if not time_str or not isinstance(time_str, str) or time_str.strip() == '':
+                    return None
+                    
+                time_formats = ['%H:%M:%S', '%H:%M', '%I:%M:%S %p', '%I:%M %p']
+                for time_format in time_formats:
+                    try:
+                        return datetime.strptime(time_str, time_format).time()
+                    except ValueError:
+                        continue
+                
+                # Log the failure but don't raise exception
+                logger.warning(f"Could not parse time '{time_str}'")
+                return None
+            
             if existing_record:
                 # Update existing record
-                if 'punch_time' in row and row['punch_time']:
-                    punch_time = row['punch_time']
-                    if isinstance(punch_time, str):
-                        try:
-                            # Try to parse time
-                            time_formats = ['%H:%M:%S', '%H:%M', '%I:%M:%S %p', '%I:%M %p']
-                            for time_format in time_formats:
-                                try:
-                                    parsed_time = datetime.strptime(punch_time, time_format).time()
-                                    break
-                                except ValueError:
-                                    continue
-                            else:
-                                logger.warning(f"Could not parse time '{punch_time}' for employee {emp_code}")
-                                continue
-                                
-                            # Combine date and time
+                # Update clock in/out times if available
+                for col_name, field_name in [
+                    ('clock_in', 'clock_in'), 
+                    ('Clock In', 'clock_in'),
+                    ('clock_out', 'clock_out'),
+                    ('Clock Out', 'clock_out')
+                ]:
+                    if col_name in row and row[col_name]:
+                        parsed_time = parse_time(str(row[col_name]))
+                        if parsed_time:
                             dt = datetime.combine(parsed_date, parsed_time)
-                            
-                            # Check if check-in or check-out
-                            punch_state = row.get('punch_state', '').lower()
-                            if punch_state == 'in' or 'in' in punch_state:
+                            if field_name == 'clock_in':
                                 if not existing_record.clock_in or dt < existing_record.clock_in:
                                     existing_record.clock_in = dt
-                            elif punch_state == 'out' or 'out' in punch_state:
+                            else:
                                 if not existing_record.clock_out or dt > existing_record.clock_out:
                                     existing_record.clock_out = dt
-                        except Exception as e:
-                            logger.warning(f"Error processing punch time '{punch_time}': {str(e)}")
                 
-                # Update attendance status if available
-                if 'attendance_status' in row and row['attendance_status']:
-                    status = row['attendance_status'].upper()
-                    if status in ['P', 'A', 'V', 'T', 'S', 'E']:
-                        existing_record.attendance_status = status
+                # Update exception/status if available
+                for col_name in ['Exception', 'exception', 'attendance_status', 'Status']:
+                    if col_name in row and row[col_name] and str(row[col_name]).strip():
+                        value = str(row[col_name]).strip()
+                        
+                        # Set exception
+                        existing_record.exception = value
+                        
+                        # Try to determine attendance status from exception
+                        if 'holiday' in value.lower():
+                            existing_record.attendance_status = 'E'  # Eid/Holiday
+                        elif 'weekend' in value.lower():
+                            existing_record.attendance_status = 'V'  # Vacation/Weekend
+                        elif 'sick' in value.lower():
+                            existing_record.attendance_status = 'S'  # Sick
+                        elif 'absent' in value.lower():
+                            existing_record.attendance_status = 'A'  # Absent
+                        elif 'transfer' in value.lower():
+                            existing_record.attendance_status = 'T'  # Transfer
+                        break
                 
-                # Update total time if available (and clock in/out are set)
-                if existing_record.clock_in and existing_record.clock_out:
+                # Set device/terminal if available
+                for col_name, field_name in [
+                    ('Device[In]', 'terminal_alias_in'),
+                    ('terminal_alias_in', 'terminal_alias_in'),
+                    ('Device[Out]', 'terminal_alias_out'),
+                    ('terminal_alias_out', 'terminal_alias_out')
+                ]:
+                    if col_name in row and row[col_name] and str(row[col_name]).strip():
+                        setattr(existing_record, field_name, str(row[col_name]).strip())
+                
+                # Update total time if provided or can be calculated
+                if 'Total Time' in row and row['Total Time'] and str(row['Total Time']).strip():
+                    existing_record.total_time = str(row['Total Time'])
+                elif 'total_time' in row and row['total_time'] and str(row['total_time']).strip():
+                    existing_record.total_time = str(row['total_time'])
+                elif existing_record.clock_in and existing_record.clock_out:
                     time_diff = existing_record.clock_out - existing_record.clock_in
                     total_hours = time_diff.total_seconds() / 3600
                     existing_record.total_time = f"{total_hours:.2f}"
+                
+                # Set weekday if available or calculate it
+                if 'Weekday' in row and row['Weekday'] and str(row['Weekday']).strip():
+                    existing_record.weekday = str(row['Weekday'])
+                elif 'weekday' in row and row['weekday'] and str(row['weekday']).strip():
+                    existing_record.weekday = str(row['weekday'])
+                else:
+                    existing_record.weekday = parsed_date.strftime('%A')
                 
                 existing_record.updated_at = datetime.utcnow()
                 records_processed += 1
@@ -618,47 +789,77 @@ def process_manual_upload_data(dept_id, data):
                     weekday=parsed_date.strftime('%A')
                 )
                 
-                # Set punch times if available
-                if 'punch_time' in row and row['punch_time']:
-                    punch_time = row['punch_time']
-                    if isinstance(punch_time, str):
-                        try:
-                            # Try to parse time
-                            time_formats = ['%H:%M:%S', '%H:%M', '%I:%M:%S %p', '%I:%M %p']
-                            for time_format in time_formats:
-                                try:
-                                    parsed_time = datetime.strptime(punch_time, time_format).time()
-                                    break
-                                except ValueError:
-                                    continue
-                            else:
-                                logger.warning(f"Could not parse time '{punch_time}' for employee {emp_code}")
-                                continue
-                                
-                            # Combine date and time
+                # Set clock in/out times if available
+                for col_name, field_name in [
+                    ('clock_in', 'clock_in'), 
+                    ('Clock In', 'clock_in'),
+                    ('clock_out', 'clock_out'),
+                    ('Clock Out', 'clock_out')
+                ]:
+                    if col_name in row and row[col_name]:
+                        parsed_time = parse_time(str(row[col_name]))
+                        if parsed_time:
                             dt = datetime.combine(parsed_date, parsed_time)
-                            
-                            # Check if check-in or check-out
-                            punch_state = row.get('punch_state', '').lower()
-                            if punch_state == 'in' or 'in' in punch_state:
-                                record.clock_in = dt
-                            elif punch_state == 'out' or 'out' in punch_state:
-                                record.clock_out = dt
-                        except Exception as e:
-                            logger.warning(f"Error processing punch time '{punch_time}': {str(e)}")
+                            setattr(record, field_name, dt)
                 
-                # Set attendance status if available
-                if 'attendance_status' in row and row['attendance_status']:
-                    status = row['attendance_status'].upper()
-                    if status in ['P', 'A', 'V', 'T', 'S', 'E']:
-                        record.attendance_status = status
+                # Set exception/status if available
+                for col_name in ['Exception', 'exception', 'attendance_status', 'Status']:
+                    if col_name in row and row[col_name] and str(row[col_name]).strip():
+                        value = str(row[col_name]).strip()
+                        
+                        # Set exception
+                        record.exception = value
+                        
+                        # Try to determine attendance status from exception
+                        if 'holiday' in value.lower():
+                            record.attendance_status = 'E'  # Eid/Holiday
+                        elif 'weekend' in value.lower():
+                            record.attendance_status = 'V'  # Vacation/Weekend
+                        elif 'sick' in value.lower():
+                            record.attendance_status = 'S'  # Sick
+                        elif 'absent' in value.lower():
+                            record.attendance_status = 'A'  # Absent
+                        elif 'transfer' in value.lower():
+                            record.attendance_status = 'T'  # Transfer
+                        else:
+                            # Default to present if time entries exist
+                            if record.clock_in or record.clock_out:
+                                record.attendance_status = 'P'
+                        break
                 
-                # Calculate total time if both clock in and out are set
-                if record.clock_in and record.clock_out:
+                # Set device/terminal if available
+                for col_name, field_name in [
+                    ('Device[In]', 'terminal_alias_in'),
+                    ('terminal_alias_in', 'terminal_alias_in'),
+                    ('Device[Out]', 'terminal_alias_out'),
+                    ('terminal_alias_out', 'terminal_alias_out')
+                ]:
+                    if col_name in row and row[col_name] and str(row[col_name]).strip():
+                        setattr(record, field_name, str(row[col_name]).strip())
+                
+                # Set total time if provided or can be calculated
+                if 'Total Time' in row and row['Total Time'] and str(row['Total Time']).strip():
+                    record.total_time = str(row['Total Time'])
+                elif 'total_time' in row and row['total_time'] and str(row['total_time']).strip():
+                    record.total_time = str(row['total_time'])
+                elif record.clock_in and record.clock_out:
                     time_diff = record.clock_out - record.clock_in
                     total_hours = time_diff.total_seconds() / 3600
                     record.total_time = f"{total_hours:.2f}"
                 
+                # Set weekday if available or calculate it
+                if 'Weekday' in row and row['Weekday'] and str(row['Weekday']).strip():
+                    record.weekday = str(row['Weekday'])
+                elif 'weekday' in row and row['weekday'] and str(row['weekday']).strip():
+                    record.weekday = str(row['weekday'])
+                
+                # Set default attendance status if not set
+                if not record.attendance_status:
+                    if record.clock_in or record.clock_out:
+                        record.attendance_status = 'P'  # Present
+                    else:
+                        record.attendance_status = 'A'  # Absent
+                        
                 db.session.add(record)
                 records_processed += 1
         
@@ -667,92 +868,10 @@ def process_manual_upload_data(dept_id, data):
             continue
     
     # Commit all changes
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"Error committing changes: {str(e)}")
+        db.session.rollback()
     
     return records_processed
-
-def sync_data(app=None):
-    """
-    Sync attendance data from BioTime
-    
-    Args:
-        app: Flask application instance (for creating application context)
-    """
-    # Import here to avoid circular imports
-    from app import db
-    from models import Department, Employee, AttendanceRecord, SyncLog
-    
-    # Get app context if provided
-    ctx = None
-    if app:
-        ctx = app.app_context()
-        ctx.push()
-    
-    total_records = 0
-    errors = []
-    synced_depts = []
-    sync_log = None
-    
-    # Calculate date range (past month to current date)
-    end_date = datetime.now().date()
-    start_date = end_date - timedelta(days=30)
-    
-    # Format dates for API
-    start_date_str = start_date.strftime('%Y-%m-%d')
-    end_date_str = end_date.strftime('%Y-%m-%d')
-    
-    logger.info(f"Starting BioTime data sync from {start_date_str} to {end_date_str}")
-    
-    try:
-        # Create sync log entry
-        sync_log = SyncLog(
-            sync_time=datetime.utcnow(),
-            status="in_progress",
-            departments_synced=",".join(str(d) for d in DEPARTMENTS)
-        )
-        db.session.add(sync_log)
-        db.session.commit()
-        
-        # Fetch all data in one request
-        data = fetch_biotime_data(None, start_date_str, end_date_str)
-        
-        if data is not None and not data.empty:
-            # Process data for each department
-            for dept_id in DEPARTMENTS:
-                try:
-                    # Process the data
-                    records = process_department_data(dept_id, data)
-                    total_records += records
-                    if records > 0:
-                        synced_depts.append(str(dept_id))
-                        logger.info(f"Successfully synced department {dept_id} - {records} records")
-                except Exception as e:
-                    error_msg = f"Error processing department {dept_id}: {str(e)}"
-                    logger.error(error_msg)
-                    errors.append(error_msg)
-        else:
-            error_msg = "No data fetched from BioTime API"
-            logger.error(error_msg)
-            errors.append(error_msg)
-        
-        # Update sync log
-        if sync_log:
-            sync_log.status = "success" if not errors else "partial"
-            sync_log.records_synced = total_records
-            sync_log.departments_synced = ",".join(synced_depts)
-            sync_log.error_message = "\n".join(errors) if errors else None
-            db.session.commit()
-        
-        logger.info(f"Data sync completed: {total_records} records synced")
-    
-    except Exception as e:
-        logger.error(f"Sync process failed: {str(e)}")
-        if sync_log:
-            sync_log.status = "error"
-            sync_log.error_message = str(e)
-            db.session.commit()
-    
-    finally:
-        # Clean up app context if it was pushed
-        if ctx:
-            ctx.pop()
