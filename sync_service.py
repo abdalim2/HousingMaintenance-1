@@ -5,1088 +5,532 @@ import pandas as pd
 from datetime import datetime, timedelta
 import tempfile
 from flask import current_app
+from sqlalchemy.exc import SQLAlchemyError
+from tenacity import retry, stop_after_attempt, wait_fixed
 
-# Configure logging
+# إعداد التسجيل
 logger = logging.getLogger(__name__)
 
-# BioTime API configuration
-BIOTIME_API_BASE_URL = "http://213.210.196.115:8585/att/api/transactionReport/export/"
+# إعداد واجهة BioTime API
+BIOTIME_API_BASE_URL = "http://172.16.16.13:8585/att/api/transactionReport/export/"
 BIOTIME_USERNAME = os.environ.get("BIOTIME_USERNAME", "raghad")
 BIOTIME_PASSWORD = os.environ.get("BIOTIME_PASSWORD", "A1111111")
-DEPARTMENTS = [11]  # Changed to only use department 11 for testing
+DEPARTMENTS = [10]  # تحديث رقم القسم ليطابق الرابط الجديد
+
+# إعدادات نطاق التاريخ للمزامنة
+SYNC_START_DATE = os.environ.get("SYNC_START_DATE", "")
+SYNC_END_DATE = os.environ.get("SYNC_END_DATE", "")
 
 def sync_data(app=None):
     """
-    Sync attendance data from BioTime
+    مزامنة بيانات الحضور من BioTime API مع قاعدة البيانات.
     
     Args:
-        app: Flask application instance (for creating application context)
+        app: مثيل تطبيق Flask (اختياري لإنشاء سياق التطبيق).
+    
+    Returns:
+        None
+    
+    Raises:
+        SQLAlchemyError: في حالة حدوث خطأ في قاعدة البيانات.
+        RequestException: في حالة فشل الاتصال بـ API.
     """
-    # Import here to avoid circular imports
     from app import db
     from models import Department, Employee, AttendanceRecord, SyncLog
-    from sqlalchemy import exc as sqlalchemy_exc
-    
-    # Get app context if provided
+
     ctx = None
     if app:
         ctx = app.app_context()
         ctx.push()
-    
+
     total_records = 0
     errors = []
     synced_depts = []
     sync_log = None
-    
-    # Calculate date range (past month to current date)
+    start_time = datetime.utcnow()
+
+    # استخدام نطاق التاريخ المُدخل من شاشة الإعدادات، وإلا استخدام آخر 30 يومًا
     end_date = datetime.now().date()
     start_date = end_date - timedelta(days=30)
     
-    # Format dates for API
+    # استخدام تاريخ البداية المُدخل إذا كان متاحًا
+    if SYNC_START_DATE:
+        try:
+            # محاولة تحليل التاريخ بعدة تنسيقات شائعة
+            for date_format in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d']:
+                try:
+                    start_date = datetime.strptime(SYNC_START_DATE, date_format).date()
+                    logger.info(f"تم تحليل تاريخ البداية بنجاح: {SYNC_START_DATE} -> {start_date} (تنسيق: {date_format})")
+                    break
+                except ValueError:
+                    continue
+            else:
+                logger.warning(f"تعذر تحليل تاريخ البداية: {SYNC_START_DATE}. استخدام التاريخ الافتراضي: {start_date}")
+        except Exception as e:
+            logger.warning(f"خطأ في تحليل تاريخ البداية: {str(e)}. استخدام التاريخ الافتراضي: {start_date}")
+    
+    # استخدام تاريخ النهاية المُدخل إذا كان متاحًا
+    if SYNC_END_DATE:
+        try:
+            # محاولة تحليل التاريخ بعدة تنسيقات شائعة
+            for date_format in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d']:
+                try:
+                    end_date = datetime.strptime(SYNC_END_DATE, date_format).date()
+                    logger.info(f"تم تحليل تاريخ النهاية بنجاح: {SYNC_END_DATE} -> {end_date} (تنسيق: {date_format})")
+                    break
+                except ValueError:
+                    continue
+            else:
+                logger.warning(f"تعذر تحليل تاريخ النهاية: {SYNC_END_DATE}. استخدام التاريخ الافتراضي: {end_date}")
+        except Exception as e:
+            logger.warning(f"خطأ في تحليل تاريخ النهاية: {str(e)}. استخدام التاريخ الافتراضي: {end_date}")
+    
+    # التأكد من أن تاريخ البداية أقدم من تاريخ النهاية
+    if start_date > end_date:
+        logger.warning(f"تاريخ البداية ({start_date}) لاحق لتاريخ النهاية ({end_date}). تبديل التواريخ.")
+        start_date, end_date = end_date, start_date
+    
     start_date_str = start_date.strftime('%Y-%m-%d')
     end_date_str = end_date.strftime('%Y-%m-%d')
     
-    logger.info(f"Starting BioTime data sync from {start_date_str} to {end_date_str}")
-    
+    logger.info(f"بدء مزامنة بيانات BioTime من {start_date_str} إلى {end_date_str}")
+    logger.info(f"التواريخ المُدخلة: البداية={SYNC_START_DATE or 'غير محدد'}, النهاية={SYNC_END_DATE or 'غير محدد'}")
+
     try:
-        # Test database connection first to ensure it's working with Neon PostgreSQL
-        try:
-            # Create sync log entry
-            sync_log = SyncLog(
-                sync_time=datetime.utcnow(),
-                status="in_progress",
-                departments_synced=",".join(str(d) for d in DEPARTMENTS)
-            )
-            db.session.add(sync_log)
-            db.session.commit()
-            logger.info("Database connection successful")
-        except sqlalchemy_exc.SQLAlchemyError as dbe:
-            logger.error(f"Database connection error: {str(dbe)}")
-            # Try to recover
-            try:
-                db.session.rollback()
-                # Try to reconnect to database
-                db.engine.dispose()
-                db.session.remove()
-                
-                # Try again with a fresh connection
-                sync_log = SyncLog(
-                    sync_time=datetime.utcnow(),
-                    status="in_progress",
-                    departments_synced=",".join(str(d) for d in DEPARTMENTS)
-                )
-                db.session.add(sync_log)
-                db.session.commit()
-                logger.info("Database reconnection successful")
-            except Exception as recovery_e:
-                logger.error(f"Database recovery failed: {str(recovery_e)}")
-                # Add error to list
-                errors.append(f"Database connection error: {str(dbe)}. Recovery failed: {str(recovery_e)}")
-        
-        # Only attempt API connection if database is working
-        if not errors:
-            try:
-                # Fetch all data in one request
-                data = fetch_biotime_data(None, start_date_str, end_date_str)
-                
-                if data is not None and not data.empty:
-                    # Process data for each department
-                    for dept_id in DEPARTMENTS:
-                        try:
-                            # Process the data
-                            records = process_department_data(dept_id, data)
-                            total_records += records
-                            if records > 0:
-                                synced_depts.append(str(dept_id))
-                                logger.info(f"Successfully synced department {dept_id} - {records} records")
-                        except Exception as dept_e:
-                            error_msg = f"Error processing department {dept_id}: {str(dept_e)}"
-                            logger.error(error_msg)
-                            errors.append(error_msg)
-                else:
-                    error_msg = "No data fetched from BioTime API. This can be normal during testing with the new database connection."
-                    logger.warning(error_msg)
+        # إنشاء سجل مزامنة
+        sync_log = SyncLog(
+            sync_time=datetime.utcnow(),
+            status="in_progress",
+            departments_synced=",".join(str(d) for d in DEPARTMENTS)
+        )
+        db.session.add(sync_log)
+        db.session.commit()
+
+        # جلب البيانات
+        data = fetch_biotime_data(None, start_date_str, end_date_str)
+        if data is not None and not data.empty:
+            for dept_id in DEPARTMENTS:
+                try:
+                    records = process_department_data(dept_id, data)
+                    total_records += records
+                    if records > 0:
+                        synced_depts.append(str(dept_id))
+                        logger.info(f"تمت مزامنة القسم {dept_id} بنجاح - {records} سجل")
+                except Exception as dept_e:
+                    error_msg = f"خطأ في معالجة القسم {dept_id}: {str(dept_e)}"
+                    logger.error(error_msg)
                     errors.append(error_msg)
-            except requests.exceptions.ConnectionError as conn_e:
-                error_msg = f"Connection error to BioTime API: {str(conn_e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-            except requests.exceptions.Timeout as timeout_e:
-                error_msg = f"Timeout connecting to BioTime API: {str(timeout_e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-            except requests.exceptions.RequestException as req_e:
-                error_msg = f"BioTime API request error: {str(req_e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-            except Exception as api_e:
-                error_msg = f"Unexpected error with BioTime API: {str(api_e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-        
-        # Update sync log - wrap in try/except to handle potential database issues
-        try:
-            if sync_log:
-                sync_log.status = "success" if not errors else "partial"
-                sync_log.records_synced = total_records
-                sync_log.departments_synced = ",".join(synced_depts) if synced_depts else ""
-                sync_log.error_message = "\n".join(errors) if errors else None
-                db.session.commit()
-            
-            logger.info(f"Data sync completed: {total_records} records synced")
-        except sqlalchemy_exc.SQLAlchemyError as commit_e:
-            logger.error(f"Error updating sync log: {str(commit_e)}")
-            try:
-                # Try to recover
-                db.session.rollback()
-                if sync_log:
-                    sync_log.status = "error"
-                    sync_log.error_message = f"Database error during logging: {str(commit_e)}"
-                    db.session.commit()
-            except:
-                logger.error("Could not recover from database error")
-    
+        else:
+            error_msg = "لم يتم جلب بيانات من BioTime API."
+            logger.warning(error_msg)
+            errors.append(error_msg)
+
+        # تحديث سجل المزامنة
+        sync_log.status = "success" if not errors else "partial"
+        sync_log.records_synced = total_records
+        sync_log.departments_synced = ",".join(synced_depts) if synced_depts else ""
+        sync_log.error_message = "\n".join(errors) if errors else None
+        db.session.commit()
+
+        logger.info(f"اكتملت المزامنة: {total_records} سجل، الوقت المستغرق: {datetime.utcnow() - start_time}")
+
     except Exception as e:
-        logger.error(f"Sync process failed: {str(e)}")
-        try:
-            if sync_log:
-                sync_log.status = "error"
-                sync_log.error_message = str(e)
-                db.session.commit()
-        except:
-            # If we can't even update the sync log, just log the error
-            logger.error(f"Failed to update sync log with error: {str(e)}")
-    
+        logger.error(f"فشلت عملية المزامنة: {str(e)}", exc_info=True)
+        if sync_log:
+            sync_log.status = "error"
+            sync_log.error_message = str(e)
+            db.session.commit()
+
     finally:
-        # Clean up app context if it was pushed
         if ctx:
             ctx.pop()
 
-
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def fetch_biotime_data(department_id, start_date, end_date):
     """
-    Fetch attendance data from BioTime API for a specific department
+    جلب بيانات الحضور من BioTime API.
     
     Args:
-        department_id: ID of the department to fetch data for
-        start_date: Start date for data fetch (format: YYYY-MM-DD)
-        end_date: End date for data fetch (format: YYYY-MM-DD)
-        
+        department_id: معرف القسم (غير مستخدم حاليًا).
+        start_date: تاريخ البدء (بصيغة YYYY-MM-DD).
+        end_date: تاريخ الانتهاء (بصيغة YYYY-MM-DD).
+    
     Returns:
-        DataFrame containing attendance data
+        DataFrame: بيانات الحضور أو DataFrame فارغ في حالة الخطأ.
     """
-    # Format dates with time for the new API
     start_datetime = f"{start_date} 00:00:00"
     end_datetime = f"{end_date} 23:59:59"
-    
-    # For transaction report API, we need to use all departments in one request
     departments_str = ",".join(str(d) for d in DEPARTMENTS)
-    
+
     params = {
-        "export_headers": "emp_code,first_name,dept_name,att_date,punch_time,punch_state,source",
+        "export_headers": "emp_code,first_name,dept_name,att_date,punch_time,punch_state,terminal_alias",
         "start_date": start_datetime,
         "end_date": end_datetime,
         "departments": departments_str,
         "employees": -1,
-        "page_size": 999999,
+        "page_size": 6000,
         "export_type": "txt",
         "page": 1,
-        "limit": 999999
+        "limit": 6000
     }
-    
+
     temp_filename = None
-    
     try:
-        logger.debug(f"Fetching data for department {department_id} from {start_date} to {end_date}")
-        
-        # Make API request with more robust error handling
-        try:
-            # During testing with a new database, we might not need actual API data
-            # Check DATABASE_URL to see if we're using Neon PostgreSQL and skip actual API call if needed
-            if os.environ.get("DATABASE_URL", "").find("neon.tech") >= 0:
-                logger.info("Using Neon PostgreSQL database. Creating minimal test data instead of calling API.")
-                # Create an empty dataframe with the expected columns for testing
-                data = pd.DataFrame(columns=[
-                    'emp_code', 'first_name', 'dept_name', 'att_date', 
-                    'punch_time', 'punch_state', 'source'
-                ])
-                return data
-                
-            # Proceed with actual API call if not using Neon or if we want real data
-            response = requests.get(
-                BIOTIME_API_BASE_URL,
-                params=params,
-                auth=(BIOTIME_USERNAME, BIOTIME_PASSWORD),
-                timeout=30  # Reduced timeout to fail faster if API is not reachable
-            )
-            
-            if response.status_code != 200:
-                logger.error(f"API request failed: {response.status_code} - {response.text}")
-                return None
-            
-            # Save response to temporary file to handle potential encoding issues
-            with tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='wb') as temp:
-                temp.write(response.content)
-                temp_filename = temp.name
-            
-            # Read data from file
-            data = pd.read_csv(temp_filename, sep='\t', encoding='utf-8')
-            
-            logger.debug(f"Successfully fetched {len(data)} records for department {department_id}")
-            return data
-            
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error to BioTime API: {str(e)}")
-            # Return empty dataframe with expected columns for testing/demonstration purposes
-            data = pd.DataFrame(columns=[
-                'emp_code', 'first_name', 'dept_name', 'att_date', 
-                'punch_time', 'punch_state', 'source'
+        if os.environ.get("DATABASE_URL", "").find("neon.tech") >= 0:
+            logger.info("استخدام قاعدة بيانات Neon PostgreSQL. إنشاء بيانات اختبار.")
+            return pd.DataFrame(columns=[
+                'emp_code', 'first_name', 'dept_name', 'att_date',
+                'punch_time', 'punch_state', 'terminal_alias'
             ])
-            return data
-            
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout connecting to BioTime API: {str(e)}")
-            # Return empty dataframe with expected columns for testing/demonstration purposes
-            data = pd.DataFrame(columns=[
-                'emp_code', 'first_name', 'dept_name', 'att_date', 
-                'punch_time', 'punch_state', 'source'
-            ])
-            return data
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request error connecting to BioTime API: {str(e)}")
-            # Return empty dataframe with expected columns for testing/demonstration purposes
-            data = pd.DataFrame(columns=[
-                'emp_code', 'first_name', 'dept_name', 'att_date', 
-                'punch_time', 'punch_state', 'source'
-            ])
-            return data
-        
-    except Exception as e:
-        logger.error(f"Error fetching data: {str(e)}")
-        # Return empty dataframe with expected columns for testing/demonstration purposes
-        data = pd.DataFrame(columns=[
-            'emp_code', 'first_name', 'dept_name', 'att_date', 
-            'punch_time', 'punch_state', 'source'
-        ])
+
+        response = requests.get(
+            BIOTIME_API_BASE_URL,
+            params=params,
+            auth=(BIOTIME_USERNAME, BIOTIME_PASSWORD),
+            timeout=15,
+            stream=True
+        )
+        response.raise_for_status()
+
+        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='wb') as temp:
+            temp.write(response.content)
+            temp_filename = temp.name
+
+        # قراءة البيانات على دفعات لتحسين إدارة الذاكرة
+        data = pd.read_csv(temp_filename, sep='\t', encoding='utf-8', chunksize=1000)
+        data = pd.concat(data)
+        logger.debug(f"تم جلب {len(data)} سجل للقسم {department_id}")
         return data
-        
+
+    except requests.exceptions.HTTPError as http_err:
+        logger.error(f"خطأ HTTP في واجهة BioTime: {str(http_err)}")
+        return pd.DataFrame(columns=[
+            'emp_code', 'first_name', 'dept_name', 'att_date',
+            'punch_time', 'punch_state', 'terminal_alias'
+        ])
+    except requests.exceptions.ConnectionError as conn_err:
+        logger.error(f"خطأ في الاتصال بـ BioTime: {str(conn_err)}")
+        raise
+    except Exception as e:
+        logger.error(f"خطأ في جلب البيانات: {str(e)}")
+        return pd.DataFrame(columns=[
+            'emp_code', 'first_name', 'dept_name', 'att_date',
+            'punch_time', 'punch_state', 'terminal_alias'
+        ])
     finally:
-        # Clean up temp file if it exists
         if temp_filename and os.path.exists(temp_filename):
             try:
                 os.unlink(temp_filename)
             except Exception as e:
-                logger.error(f"Error removing temp file: {str(e)}")
+                logger.error(f"خطأ في حذف الملف المؤقت: {str(e)}")
 
 def process_department_data(department_id, data):
     """
-    Process department data from BioTime and update database
+    معالجة بيانات القسم من BioTime وتحديث قاعدة البيانات.
     
     Args:
-        department_id: ID of the department
-        data: DataFrame containing attendance data
+        department_id: معرف القسم.
+        data: DataFrame يحتوي على بيانات الحضور.
+    
+    Returns:
+        int: عدد السجلات المعالجة.
     """
-    # Import here to avoid circular imports
     from app import db
     from models import Department, Employee, AttendanceRecord
-    
+
     try:
-        # Filter data by department_id
         dept_data = data[data['dept_name'].str.contains(f"Department {department_id}", na=False)] if 'dept_name' in data.columns else data
-        
         if dept_data.empty:
-            logger.warning(f"No data available for department {department_id}")
+            logger.warning(f"لا توجد بيانات متاحة للقسم {department_id}")
             return 0
-        
-        # First ensure department exists
+
+        # التأكد من وجود القسم
         dept = Department.query.filter_by(dept_id=str(department_id)).first()
         if not dept:
-            # Get department name from the data
             dept_name = dept_data['dept_name'].iloc[0] if 'dept_name' in dept_data.columns else f"Department {department_id}"
             dept = Department(dept_id=str(department_id), name=dept_name, active=True)
             db.session.add(dept)
-            db.session.commit()
-            logger.info(f"Created new department: {dept_name} (ID: {department_id})")
-        
-        # Group the data by employee and date
-        employee_records = {}
-        
-        # Process each transaction record and group by employee and date
+            db.session.flush()
+
+        # تخزين الموظفين مؤقتًا
+        emp_codes = dept_data['emp_code'].unique()
+        existing_employees = {e.emp_code: e for e in Employee.query.filter(Employee.emp_code.in_(emp_codes)).all()}
+        new_employees = []
+        attendance_records = []
+
         for _, row in dept_data.iterrows():
             try:
-                # Get or create employee
                 emp_code = str(row['emp_code'])
-                
-                # Create record key (employee_code + date)
                 att_date = datetime.strptime(row['att_date'], '%Y-%m-%d').date() if 'att_date' in row else None
                 if not att_date:
                     continue
-                    
-                record_key = f"{emp_code}_{att_date.isoformat()}"
-                
-                # Determine punch type
-                punch_state = row.get('punch_state', '').lower() if pd.notna(row.get('punch_state')) else ''
-                punch_time = row.get('punch_time') if pd.notna(row.get('punch_time')) else None
-                
-                if not punch_time:
-                    continue
-                    
-                # Initialize record if it doesn't exist
-                if record_key not in employee_records:
-                    employee_records[record_key] = {
-                        'emp_code': emp_code,
-                        'date': att_date,
-                        'first_name': row.get('first_name', '') if pd.notna(row.get('first_name')) else '',
-                        'dept_name': row.get('dept_name', '') if pd.notna(row.get('dept_name')) else '',
-                        'source': row.get('source', '') if pd.notna(row.get('source')) else '',
-                        'clock_in': None,
-                        'clock_out': None,
-                        'weekday': att_date.strftime('%A')  # Get weekday name
-                    }
-                
-                # Parse punch time 
-                try:
-                    punch_datetime = datetime.strptime(f"{row['att_date']} {punch_time}", '%Y-%m-%d %H:%M:%S')
-                    
-                    # Determine if this is clock in or clock out
-                    if 'in' in punch_state:
-                        # Set as clock in if it's earlier than current clock in or if no clock in exists
-                        if employee_records[record_key]['clock_in'] is None or punch_datetime < employee_records[record_key]['clock_in']:
-                            employee_records[record_key]['clock_in'] = punch_datetime
-                    elif 'out' in punch_state:
-                        # Set as clock out if it's later than current clock out or if no clock out exists
-                        if employee_records[record_key]['clock_out'] is None or punch_datetime > employee_records[record_key]['clock_out']:
-                            employee_records[record_key]['clock_out'] = punch_datetime
-                except Exception as e:
-                    logger.error(f"Error parsing punch time: {str(e)}")
-                    continue
-                
-            except Exception as e:
-                logger.error(f"Error processing transaction record: {str(e)}")
-                continue
-        
-        # Process the aggregated records
-        records_processed = 0
-        
-        for record_key, record_data in employee_records.items():
-            try:
-                emp_code = record_data['emp_code']
-                att_date = record_data['date']
-                
-                # Get or create employee
-                employee = Employee.query.filter_by(emp_code=emp_code).first()
+
+                # الحصول على الموظف أو إنشاؤه
+                employee = existing_employees.get(emp_code)
                 if not employee:
-                    # Create new employee
                     employee = Employee(
                         emp_code=emp_code,
-                        name=record_data.get('first_name', ''),
-                        department_id=dept.id if dept else None
+                        name=row.get('first_name', ''),
+                        department_id=dept.id
                     )
-                    db.session.add(employee)
-                    db.session.commit()
-                
-                # Calculate total time if both clock in and clock out exist
-                total_time = ''
-                if record_data['clock_in'] and record_data['clock_out']:
-                    time_diff = record_data['clock_out'] - record_data['clock_in']
-                    hours, remainder = divmod(time_diff.seconds, 3600)
-                    minutes, _ = divmod(remainder, 60)
-                    total_time = f"{hours:02d}:{minutes:02d}"
-                
-                # Determine attendance status
-                status = 'P'  # Default to Present
-                if not record_data['clock_in'] and not record_data['clock_out']:
-                    status = 'A'  # Absent if no clock in/out
-                
-                # Check if attendance record already exists for this employee and date
+                    new_employees.append(employee)
+                    existing_employees[emp_code] = employee
+
+                punch_state = row.get('punch_state', '').lower() if pd.notna(row.get('punch_state')) else ''
+                punch_time = row.get('punch_time') if pd.notna(row.get('punch_time')) else None
+                if not punch_time:
+                    continue
+
+                punch_datetime = datetime.strptime(f"{row['att_date']} {punch_time}", '%Y-%m-%d %H:%M:%S')
+                clock_in = punch_datetime if 'in' in punch_state else None
+                clock_out = punch_datetime if 'out' in punch_state else None
+
+                # التحقق من وجود سجل حضور
                 attendance = AttendanceRecord.query.filter_by(
                     employee_id=employee.id,
                     date=att_date
                 ).first()
-                
+
                 if attendance:
-                    # Update existing record
-                    attendance.clock_in = record_data['clock_in']
-                    attendance.clock_out = record_data['clock_out']
-                    attendance.total_time = total_time
-                    attendance.weekday = record_data['weekday']
-                    attendance.attendance_status = status
-                    attendance.terminal_alias_in = record_data.get('source', '')
-                    attendance.updated_at = datetime.utcnow()
+                    if clock_in and (not attendance.clock_in or clock_in < attendance.clock_in):
+                        attendance.clock_in = clock_in
+                    if clock_out and (not attendance.clock_out or clock_out > attendance.clock_out):
+                        attendance.clock_out = clock_out
                 else:
-                    # Create new attendance record
                     attendance = AttendanceRecord(
                         employee_id=employee.id,
                         date=att_date,
-                        weekday=record_data['weekday'],
-                        clock_in=record_data['clock_in'],
-                        clock_out=record_data['clock_out'],
-                        total_time=total_time,
-                        attendance_status=status,
-                        terminal_alias_in=record_data.get('source', '')
+                        weekday=att_date.strftime('%A'),
+                        clock_in=clock_in,
+                        clock_out=clock_out,
+                        attendance_status='P' if clock_in or clock_out else 'A'
                     )
-                    db.session.add(attendance)
-                
-                records_processed += 1
-                
-                # Commit in batches to avoid performance issues
-                if records_processed % 100 == 0:
-                    db.session.commit()
-                    
+                    attendance_records.append(attendance)
+
             except Exception as e:
-                logger.error(f"Error processing attendance record: {str(e)}")
+                logger.error(f"خطأ في معالجة السجل: {str(e)}")
                 continue
-        
-        # Final commit for any remaining records
+
+        # حفظ الموظفين والسجلات دفعة واحدة
+        db.session.bulk_save_objects(new_employees)
+        db.session.bulk_save_objects(attendance_records)
         db.session.commit()
-        logger.info(f"Processed {records_processed} records for department {department_id}")
-        
-        return records_processed
-    
-    except Exception as e:
-        # Handle SQLAlchemy errors and connection issues
+        logger.info(f"تمت معالجة {len(attendance_records)} سجل للقسم {department_id}")
+        return len(attendance_records)
+
+    except SQLAlchemyError as e:
         db.session.rollback()
-        
-        # Check for common connection errors
-        if "SSL connection has been closed unexpectedly" in str(e) or "Can't reconnect until invalid transaction is rolled back" in str(e):
-            logger.error(f"Database connection error: {str(e)}")
-            # Try to recover the session
-            try:
-                db.session.remove()
-                db.engine.dispose()
-                logger.info("Database connection reset")
-            except Exception as inner_e:
-                logger.error(f"Failed to reset database connection: {str(inner_e)}")
-        else:
-            logger.error(f"Error processing department data: {str(e)}")
-        
-        # Re-raise the exception to be handled by the caller
+        logger.error(f"خطأ في قاعدة البيانات: {str(e)}")
+        raise
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"خطأ في معالجة بيانات القسم: {str(e)}")
         raise
 
 def process_uploaded_file(file_path):
     """
-    Process an uploaded file containing attendance data
+    معالجة ملف مرفوع يحتوي على بيانات الحضور.
     
     Args:
-        file_path: Path to the uploaded file
-        
+        file_path: مسار الملف المرفوع.
+    
     Returns:
-        Number of records processed
+        int: عدد السجلات المعالجة.
     """
-    # Import here to avoid circular imports
     from app import db
     from models import Department, Employee, AttendanceRecord, SyncLog
-    
-    total_records = 0
-    sync_log = None
-    # Define required columns
-    required_columns = ['emp_code', 'first_name', 'dept_name', 'att_date', 'punch_time']
-    
+
     try:
-        # Read data from file - try different formats
+        # محاولة قراءة الملف بصيغ مختلفة
         try:
-            # First try tab-separated format
             data = pd.read_csv(file_path, sep='\t', encoding='utf-8')
-            
-            # Check if required columns exist
-            missing_columns = [col for col in required_columns if col not in data.columns]
-            
-            if missing_columns:
-                logger.warning(f"File is missing required columns: {missing_columns}")
-                # Try with different column names that might be in the file
-                column_mapping = {}
-                if 'emp_code' not in data.columns and 'employee_code' in data.columns:
-                    column_mapping['employee_code'] = 'emp_code'
-                if 'first_name' not in data.columns and 'name' in data.columns:
-                    column_mapping['name'] = 'first_name'
-                if 'dept_name' not in data.columns and 'department' in data.columns:
-                    column_mapping['department'] = 'dept_name'
-                if 'att_date' not in data.columns and 'date' in data.columns:
-                    column_mapping['date'] = 'att_date'
-                
-                # Rename columns if mappings exist
-                if column_mapping:
-                    data.rename(columns=column_mapping, inplace=True)
-                
-                # Check again for required columns
-                missing_columns = [col for col in required_columns if col not in data.columns]
-                if missing_columns:
-                    # Still missing columns, try comma-separated format
-                    data = pd.read_csv(file_path, encoding='utf-8')
-                    
-                    # Check required columns again
-                    missing_columns = [col for col in required_columns if col not in data.columns]
-                    if missing_columns:
-                        # If still missing, log error and return
-                        logger.error(f"Uploaded file is missing required columns: {missing_columns}")
-                        raise ValueError(f"Uploaded file is missing required columns: {missing_columns}")
-        except Exception as e:
-            # Try reading as plain text and parse manually
-            logger.warning(f"Could not parse file with pandas: {str(e)}")
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
-            # Check if there are any lines
-            if not lines:
-                logger.error("Uploaded file is empty")
-                raise ValueError("Uploaded file is empty")
-            
-            # Try to identify the delimiter (tab or comma)
-            first_line = lines[0].strip()
-            delimiter = '\t' if '\t' in first_line else ',' if ',' in first_line else None
-            
-            if not delimiter:
-                logger.error("Could not identify delimiter in file")
-                raise ValueError("Could not identify delimiter in file (should be tab or comma separated)")
-            
-            # Parse header and data
-            header = [h.strip() for h in lines[0].split(delimiter)]
-            rows = []
-            for line in lines[1:]:
-                if line.strip():  # Skip empty lines
-                    values = [v.strip() for v in line.split(delimiter)]
-                    if len(values) >= len(header):
-                        row = {header[i]: values[i] for i in range(len(header))}
-                        rows.append(row)
-            
-            # Convert to DataFrame
-            data = pd.DataFrame(rows)
-            
-            # Check if we got any data
-            if data.empty:
-                logger.error("Could not parse any data from file")
-                raise ValueError("Could not parse any data from file")
-                
-            # Be more flexible with required columns for manually uploaded files
-            # As long as we have employee code and date, we can work with it
-            minimal_required = ['emp_code', 'att_date']
-            
-            # Try to map common column names
-            column_mapping = {}
-            
-            # Check all possible column name variations
-            for col in data.columns:
-                col_lower = col.lower()
-                
-                # Employee code mapping
-                if any(term in col_lower for term in ['employee id', 'emp id', 'emp_id', 'empid', 'employee code', 'emp code', 'emp_code', 'empcode']) and 'emp_code' not in data.columns:
-                    column_mapping[col] = 'emp_code'
-                
-                # Date mapping - avoid mapping weekday as date
-                elif 'date' in col_lower and 'weekday' not in col_lower and 'att_date' not in data.columns:
-                    column_mapping[col] = 'att_date'
-                
-                # Department mapping
-                elif any(term in col_lower for term in ['dept', 'department', 'division']) and 'dept_name' not in data.columns:
-                    column_mapping[col] = 'dept_name'
-                
-                # Name mapping
-                elif any(term in col_lower for term in ['employee name', 'emp name', 'emp_name', 'empname', 'name']) and not any(x in col_lower for x in ['dept', 'first', 'last', 'device']) and 'first_name' not in data.columns:
-                    column_mapping[col] = 'first_name'
-                
-                # Clock in mapping
-                elif any(term in col_lower for term in ['clock in', 'clock-in', 'clockin', 'time in', 'timein', 'in time']) and 'clock_in' not in data.columns:
-                    column_mapping[col] = 'clock_in'
-                    
-                # Clock out mapping
-                elif any(term in col_lower for term in ['clock out', 'clock-out', 'clockout', 'time out', 'timeout', 'out time']) and 'clock_out' not in data.columns:
-                    column_mapping[col] = 'clock_out'
-                    
-                # Punch time (only if separate clock in/out not available)
-                elif any(term in col_lower for term in ['punch time', 'punch_time', 'punchtime']) and 'punch_time' not in data.columns:
-                    column_mapping[col] = 'punch_time'
-                    
-                # Exception/Status mapping
-                elif any(term in col_lower for term in ['exception', 'status', 'state', 'attendance status']) and 'attendance_status' not in data.columns:
-                    column_mapping[col] = 'attendance_status'
-                
-                # Device/Terminal mapping
-                elif any(term in col_lower for term in ['device', 'terminal', 'location']) and 'in' in col_lower and 'terminal_alias_in' not in data.columns:
-                    column_mapping[col] = 'terminal_alias_in'
-                    
-                # Total time mapping
-                elif any(term in col_lower for term in ['total time', 'total_time', 'totaltime', 'hours worked', 'worked time']) and 'total_time' not in data.columns:
-                    column_mapping[col] = 'total_time'
-            
-            # Apply mappings
-            if column_mapping:
-                data.rename(columns=column_mapping, inplace=True)
-            
-            # Check minimal required columns
-            missing_minimal = [col for col in minimal_required if col not in data.columns]
-            if missing_minimal:
-                logger.error(f"Uploaded file is missing essential columns: {missing_minimal}")
-                raise ValueError(f"Uploaded file is missing essential columns: {missing_minimal}")
-                
-            # If we got here, we have the minimal required data to proceed
+        except:
+            try:
+                data = pd.read_csv(file_path, encoding='utf-8')
+            except:
+                data = pd.read_excel(file_path)
+
+        # Log the actual columns found in the file for debugging
+        logger.info(f"الأعمدة الموجودة في الملف المرفوع: {list(data.columns)}")
         
+        # تعيين الأعمدة بمرونة - مع المزيد من البدائل
+        column_mapping = {
+            'emp_code': ['emp_code', 'C. No.', 'employee_code', 'employee id', 'emp id', 'code', 'emp', 'id', 'رقم الموظف', 'الرقم', 'c.no', 'code', 'no', 'empcode', 'emp.code'],
+            'att_date': ['att_date', 'date', 'Date', 'تاريخ', 'day', 'يوم', 'punch_date', 'التاريخ', 'att date', 'attdate', 'attendance date', 'التاريخ', 'record date', 'recorddate'],
+            'first_name': ['first_name', 'name', 'Employee Name', 'اسم الموظف', 'الاسم', 'emp name', 'empname', 'full name', 'fullname', 'employee', 'first name'],
+            'dept_name': ['dept_name', 'department', 'Department', 'القسم', 'اسم القسم', 'dept', 'department name', 'deptname'],
+            'clock_in': ['clock_in', 'Clock In', 'time in', 'وقت الحضور', 'حضور', 'checkin', 'check in', 'punch_time_in', 'in', 'time-in', 'timein', 'in time'],
+            'clock_out': ['clock_out', 'Clock Out', 'time out', 'وقت الانصراف', 'انصراف', 'checkout', 'check out', 'punch_time_out', 'out', 'time-out', 'timeout', 'out time']
+        }
+
+        # Add a case-insensitive search for columns
+        for standard_col, possible_cols in column_mapping.items():
+            # First try exact matches
+            found = False
+            for col in possible_cols:
+                if col in data.columns:
+                    data.rename(columns={col: standard_col}, inplace=True)
+                    found = True
+                    break
+                    
+            # If not found, try case-insensitive matches
+            if not found:
+                for col in data.columns:
+                    for possible_col in possible_cols:
+                        if col.lower() == possible_col.lower() or possible_col.lower() in col.lower():
+                            data.rename(columns={col: standard_col}, inplace=True)
+                            found = True
+                            break
+                    if found:
+                        break
+        
+        # If still missing required columns, check if punch_time and punch_state can be used to create them
+        if 'punch_time' in data.columns and 'att_date' not in data.columns and 'punch_state' in data.columns:
+            try:
+                # Try to extract date from punch_time if it contains date information
+                data['att_date'] = pd.to_datetime(data['punch_time']).dt.date.astype(str)
+                logger.info("تم استخراج تاريخ الحضور من عمود punch_time")
+            except:
+                logger.warning("فشل استخراج التاريخ من عمود punch_time")
+                
+        required_cols = ['emp_code', 'att_date']
+        missing_cols = [col for col in required_cols if col not in data.columns]
+        if missing_cols:
+            raise ValueError(f"الملف يفتقد الأعمدة الضرورية: {missing_cols}")
+
         if data.empty:
-            logger.warning("Uploaded file contains no data")
+            logger.warning("الملف المرفوع لا يحتوي على بيانات")
             return 0
-            
-        # Create sync log entry
+
+        # إنشاء سجل مزامنة
         sync_log = SyncLog(
             sync_time=datetime.utcnow(),
             status="in_progress",
-            departments_synced="Manual upload"
+            departments_synced="تحميل يدوي"
         )
         db.session.add(sync_log)
         db.session.commit()
-        
-        # Process data for each department
-        department_records = {}
-        errors = []
-        
-        # First, try to process data specifically for each department
-        for dept_id in DEPARTMENTS:
-            try:
-                # Filter data for this department if possible
-                dept_data = data
-                if 'dept_id' in data.columns:
-                    dept_data = data[data['dept_id'] == str(dept_id)]
-                elif 'dept_name' in data.columns:
-                    # Get department name for this ID
-                    dept = Department.query.filter_by(dept_id=str(dept_id)).first()
-                    if dept:
-                        dept_data = data[data['dept_name'].str.contains(dept.name, case=False, na=False)]
-                
-                if not dept_data.empty:
-                    records = process_manual_upload_data(dept_id, dept_data)
-                    if records > 0:
-                        department_records[dept_id] = records
-                        total_records += records
-            except Exception as e:
-                error_msg = f"Error processing department {dept_id} from uploaded file: {str(e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-        
-        # If no records were processed by department, try processing all data at once
-        if total_records == 0:
-            try:
-                # Use a default department if available
-                default_dept = Department.query.first()
-                default_dept_id = default_dept.dept_id if default_dept else None
-                
-                records = process_manual_upload_data(default_dept_id, data)
-                total_records = records
-                department_records["all"] = records
-            except Exception as e:
-                error_msg = f"Error processing all data from uploaded file: {str(e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-                
-        # Update sync log
-        if sync_log:
-            sync_log.status = "success" if not errors else "partial"
-            sync_log.records_synced = total_records
-            
-            if department_records:
-                departments_str = ", ".join([f"Dept {dept_id}: {count} records" for dept_id, count in department_records.items()])
-                sync_log.departments_synced = f"Manual upload - {departments_str}"
-            
-            sync_log.error_message = "\n".join(errors) if errors else None
-            db.session.commit()
-        
-        logger.info(f"Manual sync completed: {total_records} records processed from uploaded file")
-        return total_records
-        
+
+        records = process_manual_upload_data(None, data)
+
+        sync_log.status = "success"
+        sync_log.records_synced = records
+        sync_log.departments_synced = f"تحميل يدوي: {records} سجل"
+        db.session.commit()
+        logger.info(f"اكتملت معالجة الملف: {records} سجل")
+        return records
+
     except Exception as e:
-        # Handle database connection errors
-        if "SSL connection has been closed unexpectedly" in str(e) or "Can't reconnect until invalid transaction is rolled back" in str(e):
-            logger.error(f"Database connection error during file upload: {str(e)}")
-            # Try to recover the session
-            try:
-                db.session.rollback()
-                db.session.remove()
-                db.engine.dispose()
-                logger.info("Database connection reset during file upload")
-            except Exception as inner_e:
-                logger.error(f"Failed to reset database connection: {str(inner_e)}")
-        else:
-            logger.error(f"Error processing uploaded file: {str(e)}")
-        
-        # Update sync log with error
-        if sync_log:
+        logger.error(f"خطأ في معالجة الملف المرفوع: {str(e)}")
+        if 'sync_log' in locals():
             sync_log.status = "error"
             sync_log.error_message = str(e)
-            try:
-                db.session.commit()
-            except:
-                # If can't commit, try to reconnect
-                db.session.remove()
-                
+            db.session.commit()
         return 0
 
 def process_manual_upload_data(dept_id, data):
     """
-    Process manual upload data for a specific department
+    معالجة بيانات التحميل اليدوي لقسم معين.
     
     Args:
-        dept_id: ID of the department
-        data: DataFrame containing attendance data
-        
+        dept_id: معرف القسم (None إذا لم يتم تحديده).
+        data: DataFrame يحتوي على بيانات الحضور.
+    
     Returns:
-        Number of records processed
+        int: عدد السجلات المعالجة.
     """
-    # Import here to avoid circular imports
     from app import db
     from models import Department, Employee, AttendanceRecord
-    from sqlalchemy import exc as sqlalchemy_exc
-    
-    # Reset session to prevent connection issues
+
     try:
-        db.session.rollback()  # Roll back any pending transactions
-        # Test connection
-        db.engine.connect().close()
-        logger.info("Database connection confirmed before processing")
-    except Exception as db_e:
-        logger.error(f"Database connection issue at start of processing: {str(db_e)}")
-        try:
-            # Try to recover
-            db.session.remove()
-            db.engine.dispose()
-            # Reconnect
-            db.engine.connect().close()
-            logger.info("Database connection reset successfully")
-        except Exception as reset_e:
-            logger.error(f"Failed to reset database connection: {str(reset_e)}")
-            raise
-        
-    records_processed = 0
-    
-    # First make sure department exists
-    try:
-        dept = Department.query.filter_by(dept_id=str(dept_id)).first()
-        if not dept:
-            # Create department
-            dept_name = f"Department {dept_id}"
-            dept = Department(dept_id=str(dept_id), name=dept_name, active=True)
-            db.session.add(dept)
-            db.session.commit()
-            logger.info(f"Created new department: {dept_name}")
-    except sqlalchemy_exc.SQLAlchemyError as dept_e:
-        logger.error(f"Error creating department: {str(dept_e)}")
+        # إعادة الاتصال بقاعدة البيانات
         db.session.rollback()
-        # Try one more time
-        try:
+        db.engine.connect().close()
+
+        # إنشاء قسم افتراضي إذا لم يتم تحديده
+        if dept_id:
             dept = Department.query.filter_by(dept_id=str(dept_id)).first()
             if not dept:
-                # Create department with different approach
                 dept_name = f"Department {dept_id}"
                 dept = Department(dept_id=str(dept_id), name=dept_name, active=True)
                 db.session.add(dept)
-                db.session.commit()
-                logger.info(f"Created new department after retry: {dept_name}")
-        except Exception as retry_e:
-            logger.error(f"Failed to create department after retry: {str(retry_e)}")
-            # Continue with dept as None - will be handled later
-    
-    # Improved column checking for employee code
-    # Process each row in the dataframe
-    for index, row in data.iterrows():
-        try:
-            # Get employee code - check all possible column names and handle different formats
-            emp_code = None
-            # Check common column names for employee code
-            for col_name in ['emp_code', 'C. No.', 'employee_code', 'employee id', 'id', 'emp id', 'code']:
-                if col_name in data.columns and pd.notna(row[col_name]):
-                    emp_code = str(row[col_name]).strip()
-                    break
-            
-            # If still no emp_code, try to use index as code
-            if not emp_code:
-                emp_code = f"EMP{index:04d}"
-                logger.warning(f"No employee code found for row {index}, using generated code: {emp_code}")
-                
-            # Get or create employee
-            employee = Employee.query.filter_by(emp_code=emp_code).first()
-            if not employee:
-                # Try to get employee name from any available column
-                name = None
-                for col_name in ['first_name', 'name', 'Employee Name']:
-                    if col_name in row and row[col_name]:
-                        name = str(row[col_name])
-                        break
-                
-                if not name:
-                    # If name not found, use employee code as name
-                    name = f"Employee {emp_code}"
-                    logger.warning(f"No name found for employee {emp_code}, using code as name")
-                    
-                # Get department if not specified
-                department_id = None
-                if dept_id:
-                    dept = Department.query.filter_by(dept_id=str(dept_id)).first()
-                    if dept:
-                        department_id = dept.id
-                else:
-                    # Try to get department from data - check all possible column names
-                    dept_name = None
-                    for col_name in ['dept_name', 'department', 'Department']:
-                        if col_name in row and row[col_name]:
-                            dept_name = str(row[col_name])
-                            break
-                    
-                    if dept_name:
-                        dept = Department.query.filter(Department.name.ilike(f"%{dept_name}%")).first()
-                        if dept:
-                            department_id = dept.id
-                        else:
-                            # If department not found, create it
-                            try:
-                                new_dept = Department(
-                                    dept_id=dept_name.strip(),
-                                    name=dept_name.strip(),
-                                    active=True
-                                )
-                                db.session.add(new_dept)
-                                db.session.flush()
-                                department_id = new_dept.id
-                                logger.info(f"Created new department: {dept_name}")
-                            except Exception as e:
-                                logger.warning(f"Could not create department '{dept_name}': {str(e)}")
-                
-                # Create new employee
-                employee = Employee(
-                    emp_code=emp_code,
-                    name=name,
-                    department_id=department_id
-                )
-                db.session.add(employee)
-                db.session.flush()  # Get ID without committing
-            
-            # Get attendance date - check all possible column names
-            att_date = None
-            for col_name in ['att_date', 'date', 'Date']:
-                if col_name in row and row[col_name]:
-                    att_date = row[col_name]
-                    break
-                
-            if not att_date:
-                logger.warning(f"Skipping row: No date found for employee {emp_code}")
-                continue
-                
-            # Parse date
+                db.session.flush()
+        else:
+            dept = None
+
+        emp_codes = data['emp_code'].astype(str).unique()
+        # Fetch existing employees to avoid redundant queries
+        existing_employees = {e.emp_code: e for e in Employee.query.filter(Employee.emp_code.in_(emp_codes)).all()}
+        new_employees = []
+        attendance_records = []
+
+        for index, row in data.iterrows():
             try:
-                if isinstance(att_date, str):
-                    # Try different date formats
-                    date_formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%m-%d-%Y']
-                    for date_format in date_formats:
-                        try:
-                            parsed_date = datetime.strptime(att_date, date_format).date()
-                            break
-                        except ValueError:
-                            continue
-                    else:
-                        # If no format worked
-                        logger.warning(f"Skipping row: Could not parse date '{att_date}' for employee {emp_code}")
-                        continue
-                else:
-                    # Try to convert to date if it's already a datetime
-                    parsed_date = att_date.date() if hasattr(att_date, 'date') else att_date
-            except Exception as e:
-                logger.warning(f"Skipping row: Error parsing date '{att_date}' for employee {emp_code}: {str(e)}")
-                continue
-            
-            # Check if record already exists
-            existing_record = AttendanceRecord.query.filter_by(
-                employee_id=employee.id,
-                date=parsed_date
-            ).first()
-            
-            # Functions to parse time
-            def parse_time(time_str):
-                if not time_str or not isinstance(time_str, str) or time_str.strip() == '':
-                    return None
-                    
-                time_formats = ['%H:%M:%S', '%H:%M', '%I:%M:%S %p', '%I:%M %p']
-                for time_format in time_formats:
+                emp_code = str(row['emp_code'])
+                att_date = None
+                if 'att_date' in row and pd.notna(row['att_date']):
                     try:
-                        return datetime.strptime(time_str, time_format).time()
-                    except ValueError:
+                        att_date = pd.to_datetime(row['att_date']).date()
+                    except:
+                        logger.warning(f"خطأ في تحليل التاريخ للموظف {emp_code}")
                         continue
-                
-                # Log the failure but don't raise exception
-                logger.warning(f"Could not parse time '{time_str}'")
-                return None
-            
-            if existing_record:
-                # Update existing record
-                # Update clock in/out times if available
-                for col_name, field_name in [
-                    ('clock_in', 'clock_in'), 
-                    ('Clock In', 'clock_in'),
-                    ('clock_out', 'clock_out'),
-                    ('Clock Out', 'clock_out')
-                ]:
-                    if col_name in row and row[col_name]:
-                        parsed_time = parse_time(str(row[col_name]))
-                        if parsed_time:
-                            dt = datetime.combine(parsed_date, parsed_time)
-                            if field_name == 'clock_in':
-                                if not existing_record.clock_in or dt < existing_record.clock_in:
-                                    existing_record.clock_in = dt
-                            else:
-                                if not existing_record.clock_out or dt > existing_record.clock_out:
-                                    existing_record.clock_out = dt
-                
-                # Update exception/status if available
-                for col_name in ['Exception', 'exception', 'attendance_status', 'Status']:
-                    if col_name in row and row[col_name] and str(row[col_name]).strip():
-                        value = str(row[col_name]).strip()
-                        
-                        # Set exception
-                        existing_record.exception = value
-                        
-                        # Try to determine attendance status from exception
-                        if 'holiday' in value.lower():
-                            existing_record.attendance_status = 'E'  # Eid/Holiday
-                        elif 'weekend' in value.lower():
-                            existing_record.attendance_status = 'V'  # Vacation/Weekend
-                        elif 'sick' in value.lower():
-                            existing_record.attendance_status = 'S'  # Sick
-                        elif 'absent' in value.lower():
-                            existing_record.attendance_status = 'A'  # Absent
-                        elif 'transfer' in value.lower():
-                            existing_record.attendance_status = 'T'  # Transfer
-                        break
-                
-                # Set device/terminal if available
-                for col_name, field_name in [
-                    ('Device[In]', 'terminal_alias_in'),
-                    ('terminal_alias_in', 'terminal_alias_in'),
-                    ('Device[Out]', 'terminal_alias_out'),
-                    ('terminal_alias_out', 'terminal_alias_out')
-                ]:
-                    if col_name in row and row[col_name] and str(row[col_name]).strip():
-                        setattr(existing_record, field_name, str(row[col_name]).strip())
-                
-                # Update total time if provided or can be calculated
-                if 'Total Time' in row and row['Total Time'] and str(row['Total Time']).strip():
-                    existing_record.total_time = str(row['Total Time'])
-                elif 'total_time' in row and row['total_time'] and str(row['total_time']).strip():
-                    existing_record.total_time = str(row['total_time'])
-                elif existing_record.clock_in and existing_record.clock_out:
-                    time_diff = existing_record.clock_out - existing_record.clock_in
-                    total_hours = time_diff.total_seconds() / 3600
-                    existing_record.total_time = f"{total_hours:.2f}"
-                
-                # Set weekday if available or calculate it
-                if 'Weekday' in row and row['Weekday'] and str(row['Weekday']).strip():
-                    existing_record.weekday = str(row['Weekday'])
-                elif 'weekday' in row and row['weekday'] and str(row['weekday']).strip():
-                    existing_record.weekday = str(row['weekday'])
-                else:
-                    existing_record.weekday = parsed_date.strftime('%A')
-                
-                existing_record.updated_at = datetime.utcnow()
-                records_processed += 1
-            else:
-                # Create new record
-                record = AttendanceRecord(
+
+                if not att_date:
+                    logger.warning(f"تخطي السجل: لا يوجد تاريخ للموظف {emp_code}")
+                    continue
+
+                # الحصول على الموظف أو إنشاؤه
+                employee = existing_employees.get(emp_code)
+                if not employee:
+                    employee = Employee(
+                        emp_code=emp_code,
+                        name=row.get('first_name', f"Employee {emp_code}"),
+                        department_id=dept.id if dept else None
+                    )
+                    new_employees.append(employee)
+                    existing_employees[emp_code] = employee
+
+                # معالجة أوقات الدخول والخروج
+                clock_in = pd.to_datetime(row.get('clock_in')).to_pydatetime() if 'clock_in' in row and pd.notna(row['clock_in']) else None
+                clock_out = pd.to_datetime(row.get('clock_out')).to_pydatetime() if 'clock_out' in row and pd.notna(row['clock_out']) else None
+
+                # التحقق من وجود سجل
+                attendance = AttendanceRecord.query.filter_by(
                     employee_id=employee.id,
-                    date=parsed_date,
-                    weekday=parsed_date.strftime('%A')
-                )
-                
-                # Set clock in/out times if available
-                for col_name, field_name in [
-                    ('clock_in', 'clock_in'), 
-                    ('Clock In', 'clock_in'),
-                    ('clock_out', 'clock_out'),
-                    ('Clock Out', 'clock_out')
-                ]:
-                    if col_name in row and row[col_name]:
-                        parsed_time = parse_time(str(row[col_name]))
-                        if parsed_time:
-                            dt = datetime.combine(parsed_date, parsed_time)
-                            setattr(record, field_name, dt)
-                
-                # Set exception/status if available
-                for col_name in ['Exception', 'exception', 'attendance_status', 'Status']:
-                    if col_name in row and row[col_name] and str(row[col_name]).strip():
-                        value = str(row[col_name]).strip()
-                        
-                        # Set exception
-                        record.exception = value
-                        
-                        # Try to determine attendance status from exception
-                        if 'holiday' in value.lower():
-                            record.attendance_status = 'E'  # Eid/Holiday
-                        elif 'weekend' in value.lower():
-                            record.attendance_status = 'V'  # Vacation/Weekend
-                        elif 'sick' in value.lower():
-                            record.attendance_status = 'S'  # Sick
-                        elif 'absent' in value.lower():
-                            record.attendance_status = 'A'  # Absent
-                        elif 'transfer' in value.lower():
-                            record.attendance_status = 'T'  # Transfer
-                        else:
-                            # Default to present if time entries exist
-                            if record.clock_in or record.clock_out:
-                                record.attendance_status = 'P'
-                        break
-                
-                # Set device/terminal if available
-                for col_name, field_name in [
-                    ('Device[In]', 'terminal_alias_in'),
-                    ('terminal_alias_in', 'terminal_alias_in'),
-                    ('Device[Out]', 'terminal_alias_out'),
-                    ('terminal_alias_out', 'terminal_alias_out')
-                ]:
-                    if col_name in row and row[col_name] and str(row[col_name]).strip():
-                        setattr(record, field_name, str(row[col_name]).strip())
-                
-                # Set total time if provided or can be calculated
-                if 'Total Time' in row and row['Total Time'] and str(row['Total Time']).strip():
-                    record.total_time = str(row['Total Time'])
-                elif 'total_time' in row and row['total_time'] and str(row['total_time']).strip():
-                    record.total_time = str(row['total_time'])
-                elif record.clock_in and record.clock_out:
-                    time_diff = record.clock_out - record.clock_in
-                    total_hours = time_diff.total_seconds() / 3600
-                    record.total_time = f"{total_hours:.2f}"
-                
-                # Set weekday if available or calculate it
-                if 'Weekday' in row and row['Weekday'] and str(row['Weekday']).strip():
-                    record.weekday = str(row['Weekday'])
-                elif 'weekday' in row and row['weekday'] and str(row['weekday']).strip():
-                    record.weekday = str(row['weekday'])
-                
-                # Set default attendance status if not set
-                if not record.attendance_status:
-                    if record.clock_in or record.clock_out:
-                        record.attendance_status = 'P'  # Present
-                    else:
-                        record.attendance_status = 'A'  # Absent
-                        
-                db.session.add(record)
-                records_processed += 1
-        
-        except Exception as e:
-            logger.error(f"Error processing row: {str(e)}")
-            continue
-    
-    # Commit all changes
-    try:
+                    date=att_date
+                ).first()
+
+                if attendance:
+                    attendance.clock_in = clock_in or attendance.clock_in
+                    attendance.clock_out = clock_out or attendance.clock_out
+                    attendance.attendance_status = 'P' if clock_in or clock_out else 'A'
+                    attendance.updated_at = datetime.utcnow()
+                else:
+                    attendance = AttendanceRecord(
+                        employee_id=employee.id,
+                        date=att_date,
+                        weekday=att_date.strftime('%A'),
+                        clock_in=clock_in,
+                        clock_out=clock_out,
+                        attendance_status='P' if clock_in or clock_out else 'A'
+                    )
+                    attendance_records.append(attendance)
+
+            except Exception as e:
+                logger.error(f"خطأ في معالجة السجل {index}: {str(e)}")
+                continue
+
+        # حفظ البيانات دفعة واحدة
+        db.session.bulk_save_objects(new_employees)
+        db.session.bulk_save_objects(attendance_records)
         db.session.commit()
-    except Exception as e:
-        logger.error(f"Error committing changes: {str(e)}")
+        return len(attendance_records)
+
+    except SQLAlchemyError as e:
         db.session.rollback()
-        
-        # Handle connection errors
-        if "SSL connection has been closed unexpectedly" in str(e) or "Can't reconnect until invalid transaction is rolled back" in str(e):
-            try:
-                # Try to recover the session
-                db.session.remove()
-                db.engine.dispose()
-                logger.info("Database connection reset after commit error")
-                
-                # Try one more time
-                db.session.commit()
-                logger.info("Successfully committed after connection reset")
-            except Exception as inner_e:
-                logger.error(f"Failed to recover from connection error: {str(inner_e)}")
-    
-    return records_processed
+        logger.error(f"خطأ في قاعدة البيانات: {str(e)}")
+        raise
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"خطأ في معالجة البيانات: {str(e)}")
+        raise

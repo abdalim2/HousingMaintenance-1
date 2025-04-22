@@ -1,11 +1,13 @@
 from datetime import datetime
 import sys
 
-# Get the SQLAlchemy database instance from app module
-from app import db
+# Import the database connection from database.py
+from database import db
 
 class Department(db.Model):
     """Department model representing different organizational departments"""
+    __tablename__ = 'departments'
+    
     id = db.Column(db.Integer, primary_key=True)
     dept_id = db.Column(db.String(20), unique=True, nullable=False)  # ID from BioTime
     name = db.Column(db.String(100), nullable=False)
@@ -19,12 +21,14 @@ class Department(db.Model):
 
 class Employee(db.Model):
     """Employee model storing employee information"""
+    __tablename__ = 'employees'
+    
     id = db.Column(db.Integer, primary_key=True)
     emp_code = db.Column(db.String(20), unique=True, nullable=False)  # Employee code from BioTime
     name = db.Column(db.String(100), nullable=False)
     name_ar = db.Column(db.String(100))  # Arabic name
     profession = db.Column(db.String(100))
-    department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=True)
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)  # Updated to match Department __tablename__
     active = db.Column(db.Boolean, default=True)
     
     # Relationships
@@ -35,8 +39,10 @@ class Employee(db.Model):
 
 class AttendanceRecord(db.Model):
     """Attendance record for employee on specific date"""
+    __tablename__ = 'attendance_records'
+    
     id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
     weekday = db.Column(db.String(10))
     clock_in = db.Column(db.DateTime)
@@ -58,6 +64,8 @@ class AttendanceRecord(db.Model):
 
 class SyncLog(db.Model):
     """Log of data synchronization with BioTime"""
+    __tablename__ = 'sync_logs'
+    
     id = db.Column(db.Integer, primary_key=True)
     sync_time = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), nullable=False)  # success, error
@@ -70,6 +78,8 @@ class SyncLog(db.Model):
 
 class MonthPeriod(db.Model):
     """Model for storing monthly period definitions based on company calendar"""
+    __tablename__ = 'month_periods'
+    
     id = db.Column(db.Integer, primary_key=True)
     month_code = db.Column(db.String(10), nullable=False)  # Format: MM/YY (e.g., 01/25)
     start_date = db.Column(db.Date, nullable=False)

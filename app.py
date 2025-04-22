@@ -1,21 +1,14 @@
 import os
 import logging
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
+from database import db, init_db
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-# Set up database
-class Base(DeclarativeBase):
-    pass
-
-db = SQLAlchemy(model_class=Base)
 
 # Create Flask app
 app = Flask(__name__)
@@ -39,12 +32,12 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 os.environ["DATABASE_URL"] = "postgresql://neondb_owner:npg_rj0wp9bMRXox@ep-odd-cherry-a5lefri9-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
 
 # Initialize the database
-db.init_app(app)
+init_db(app)
 
 # Import models after db initialization to avoid circular imports
+from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod
+
 with app.app_context():
-    # Import models here
-    from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod
     db.create_all()
     
     # Initialize month periods if the table is empty
@@ -131,7 +124,9 @@ def settings():
         'username': os.environ.get('BIOTIME_USERNAME', sync_service.BIOTIME_USERNAME),
         'password': os.environ.get('BIOTIME_PASSWORD', sync_service.BIOTIME_PASSWORD),
         'interval': os.environ.get('SYNC_INTERVAL', '4'),
-        'departments': os.environ.get('SYNC_DEPARTMENTS', ','.join(str(d) for d in sync_service.DEPARTMENTS))
+        'departments': os.environ.get('SYNC_DEPARTMENTS', ','.join(str(d) for d in sync_service.DEPARTMENTS)),
+        'start_date': os.environ.get('SYNC_START_DATE', getattr(sync_service, 'SYNC_START_DATE', '')),
+        'end_date': os.environ.get('SYNC_END_DATE', getattr(sync_service, 'SYNC_END_DATE', ''))
     }
     
     return render_template('settings.html', last_sync=last_sync, sync_settings=sync_settings)
@@ -260,6 +255,19 @@ def save_settings():
                 flash(f'Error parsing departments: {str(dept_e)}', 'warning')
                 logger.error(f"Error parsing departments: {str(dept_e)}")
         
+        # Handle date range settings
+        if 'start_date' in request.form and request.form.get('start_date'):
+            start_date = request.form.get('start_date').strip()
+            os.environ['SYNC_START_DATE'] = start_date
+            sync_service.SYNC_START_DATE = start_date
+            logger.info(f"Updated sync start date: {start_date}")
+            
+        if 'end_date' in request.form and request.form.get('end_date'):
+            end_date = request.form.get('end_date').strip()
+            os.environ['SYNC_END_DATE'] = end_date
+            sync_service.SYNC_END_DATE = end_date
+            logger.info(f"Updated sync end date: {end_date}")
+        
         # UI settings 
         ui_settings = {
             'default_view': request.form.get('default_view', 'current'),
@@ -381,3 +389,7 @@ with app.app_context():
 # Shutdown scheduler when app exits
 import atexit
 atexit.register(lambda: scheduler.shutdown())
+
+# Run the application if this script is executed directly
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

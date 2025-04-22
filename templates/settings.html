@@ -47,6 +47,25 @@
                     </div>
                     
                     <div class="mb-3">
+                        <label class="form-label">نطاق التاريخ (Date Range)</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating mb-2">
+                                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ sync_settings.start_date }}" dir="rtl">
+                                    <label for="start_date">تاريخ البداية (Start Date)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating mb-2">
+                                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ sync_settings.end_date }}" dir="rtl">
+                                    <label for="end_date">تاريخ النهاية (End Date)</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-text text-end">حدد التاريخ للمزامنة</div>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label class="form-label">Sync Status</label>
                         <div class="d-flex align-items-center">
                             {% if last_sync and last_sync.status == 'success' %}
@@ -102,7 +121,7 @@
                         <h6><i class="fas fa-info-circle"></i> File Requirements:</h6>
                         <ul class="mb-0">
                             <li>File must be in <strong>.txt</strong> format with <strong>tab-separated</strong> values</li>
-                            <li>Must include headers: <code>emp_code</code>, <code>first_name</code>, <code>dept_name</code>, <code>att_date</code>, <code>punch_time</code>, <code>punch_state</code>, <code>source</code></li>
+                            <li>Must include headers: <code>emp_code</code>, <code>first_name</code>, <code>dept_name</code>, <code>att_date</code>, <code>punch_time</code>, <code>punch_state</code>, <code>terminal_alias</code></li>
                             <li>The file format should match the BioTime API export format</li>
                         </ul>
                     </div>
