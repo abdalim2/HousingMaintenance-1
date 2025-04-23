@@ -1,0 +1,228 @@
+{% extends 'layout.html' %}
+
+{% block title %}AI Recommendations{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('ai_dashboard') }}">AI Dashboard</a></li>
+            <li class="breadcrumb-item active">Optimization Recommendations</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4">
+        <i class="fas fa-lightbulb me-2"></i> {{ title }}
+    </h1>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('ai_recommendations') }}" class="row g-3">
+                        <div class="col-md-8">
+                            <label for="department" class="form-label">Department</label>
+                            <select name="department" id="department" class="form-select">
+                                <option value="">All Departments</option>
+                                {% for dept in departments %}
+                                    <option value="{{ dept.id }}" {% if selected_dept and selected_dept == dept.id|string %}selected{% endif %}>{{ dept.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter me-2"></i> Filter
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-star me-2"></i> AI Recommendations
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if recommendations %}
+                        <!-- Priority Filtering -->
+                        <div class="mb-4">
+                            <div class="btn-group" role="group" aria-label="Priority filter">
+                                <button type="button" class="btn btn-outline-secondary active" data-filter="all">All</button>
+                                <button type="button" class="btn btn-outline-danger" data-filter="high">High Priority</button>
+                                <button type="button" class="btn btn-outline-warning" data-filter="medium">Medium Priority</button>
+                                <button type="button" class="btn btn-outline-info" data-filter="low">Low Priority</button>
+                            </div>
+                        </div>
+
+                        <!-- Recommendations List -->
+                        <div class="recommendations-list">
+                            {% for rec in recommendations %}
+                                <div class="recommendation-item mb-4 priority-{{ rec.priority }}">
+                                    <div class="card 
+                                        {% if rec.priority == 'high' %}border-danger
+                                        {% elif rec.priority == 'medium' %}border-warning
+                                        {% else %}border-info{% endif %}">
+                                        <div class="card-header d-flex justify-content-between align-items-center
+                                            {% if rec.priority == 'high' %}bg-danger text-white
+                                            {% elif rec.priority == 'medium' %}bg-warning
+                                            {% else %}bg-info text-white{% endif %}">
+                                            <h5 class="mb-0">
+                                                {% if rec.type == 'attendance_improvement' %}
+                                                    <i class="fas fa-calendar-check me-2"></i> Attendance Improvement
+                                                {% elif rec.type == 'workload_management' %}
+                                                    <i class="fas fa-balance-scale me-2"></i> Workload Management
+                                                {% elif rec.type == 'policy_enforcement' %}
+                                                    <i class="fas fa-gavel me-2"></i> Policy Enforcement
+                                                {% elif rec.type == 'attendance_consistency' %}
+                                                    <i class="fas fa-clock me-2"></i> Attendance Consistency
+                                                {% else %}
+                                                    <i class="fas fa-lightbulb me-2"></i> {{ rec.type|capitalize }}
+                                                {% endif %}
+                                            </h5>
+                                            <span class="badge 
+                                                {% if rec.priority == 'high' %}bg-white text-danger
+                                                {% elif rec.priority == 'medium' %}bg-white text-warning
+                                                {% else %}bg-white text-info{% endif %}">
+                                                {{ rec.priority|capitalize }} Priority
+                                            </span>
+                                        </div>
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ rec.description }}</h5>
+                                            
+                                            {% if rec.department_name %}
+                                                <p class="card-text"><strong>Department:</strong> {{ rec.department_name }}</p>
+                                            {% endif %}
+                                            
+                                            <p class="card-text">{{ rec.recommendation }}</p>
+
+                                            <!-- Implementation Ideas Accordion -->
+                                            <div class="accordion mt-3" id="implementation{{ loop.index }}">
+                                                <div class="accordion-item">
+                                                    <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" aria-controls="collapse{{ loop.index }}">
+                                                            Implementation Ideas
+                                                        </button>
+                                                    </h2>
+                                                    <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#implementation{{ loop.index }}">
+                                                        <div class="accordion-body">
+                                                            <ul class="list-group list-group-flush">
+                                                                {% if rec.type == 'attendance_improvement' %}
+                                                                    <li class="list-group-item">Conduct targeted surveys to understand the reasons for low attendance</li>
+                                                                    <li class="list-group-item">Consider adjusting schedules or implementing flexible work arrangements</li>
+                                                                    <li class="list-group-item">Implement attendance incentives or recognition programs</li>
+                                                                {% elif rec.type == 'workload_management' %}
+                                                                    <li class="list-group-item">Review task distribution and resource allocation</li>
+                                                                    <li class="list-group-item">Consider hiring temporary staff for peak periods</li>
+                                                                    <li class="list-group-item">Implement time management and prioritization training</li>
+                                                                {% elif rec.type == 'policy_enforcement' %}
+                                                                    <li class="list-group-item">Review and clarify work hour policies</li>
+                                                                    <li class="list-group-item">Conduct training sessions on time management policies</li>
+                                                                    <li class="list-group-item">Implement management check-ins for compliance monitoring</li>
+                                                                {% elif rec.type == 'attendance_consistency' %}
+                                                                    <li class="list-group-item">Standardize attendance expectations across teams</li>
+                                                                    <li class="list-group-item">Implement regular attendance reviews in team meetings</li>
+                                                                    <li class="list-group-item">Consider mentoring programs pairing consistent attendees with inconsistent ones</li>
+                                                                {% else %}
+                                                                    <li class="list-group-item">Schedule a meeting with the department manager to discuss this recommendation</li>
+                                                                    <li class="list-group-item">Develop a specific action plan with measurable goals</li>
+                                                                    <li class="list-group-item">Set a timeline for implementation and follow-up assessment</li>
+                                                                {% endif %}
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-footer d-flex justify-content-between align-items-center bg-light">
+                                            <small class="text-muted">Generated by AI analytics module</small>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" role="switch" id="implementSwitch{{ loop.index }}">
+                                                <label class="form-check-label" for="implementSwitch{{ loop.index }}">Mark for implementation</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- No Results After Filtering -->
+                        <div class="no-results-message d-none alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-2"></i> No recommendations match the selected filter
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i> No recommendations available for the selected criteria
+                        </div>
+                    {% endif %}
+
+                    <!-- About Recommendations -->
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <h5><i class="fas fa-question-circle me-2"></i> About AI Recommendations</h5>
+                        <p>
+                            These recommendations are generated by analyzing attendance patterns and identifying opportunities for improvement:
+                        </p>
+                        <ul>
+                            <li><strong>Attendance Improvement</strong>: Suggestions to address low attendance rates in specific contexts</li>
+                            <li><strong>Workload Management</strong>: Recommendations for balancing workload and preventing burnout</li>
+                            <li><strong>Policy Enforcement</strong>: Identification of policy compliance issues that need addressing</li>
+                            <li><strong>Attendance Consistency</strong>: Strategies to improve consistency across teams or departments</li>
+                        </ul>
+                        <p class="mb-0 small text-muted">
+                            <i class="fas fa-lightbulb me-1"></i> Recommendations are prioritized based on their potential impact and urgency. 
+                            They are continuously updated as new attendance data becomes available.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Priority filtering
+        $('[data-filter]').click(function() {
+            // Update active state
+            $('[data-filter]').removeClass('active');
+            $(this).addClass('active');
+            
+            var filter = $(this).data('filter');
+            
+            if (filter === 'all') {
+                $('.recommendation-item').show();
+            } else {
+                $('.recommendation-item').hide();
+                $('.priority-' + filter).show();
+            }
+            
+            // Show no results message if needed
+            if ($('.recommendation-item:visible').length === 0) {
+                $('.no-results-message').removeClass('d-none');
+            } else {
+                $('.no-results-message').addClass('d-none');
+            }
+        });
+        
+        // Implementation switch handler
+        $('.form-check-input').change(function() {
+            var $card = $(this).closest('.card');
+            
+            if ($(this).is(':checked')) {
+                $card.addClass('border-success');
+                $(this).siblings('label').text('Marked for implementation');
+            } else {
+                $card.removeClass('border-success');
+                $(this).siblings('label').text('Mark for implementation');
+            }
+        });
+    });
+</script>
+{% endblock %}

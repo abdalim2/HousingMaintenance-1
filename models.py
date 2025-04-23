@@ -30,6 +30,7 @@ class Employee(db.Model):
     profession = db.Column(db.String(100))
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)  # Updated to match Department __tablename__
     active = db.Column(db.Boolean, default=True)
+    daily_hours = db.Column(db.Float, default=8.0)  # Default daily work hours set to 8.0
     
     # Relationships
     attendance_records = db.relationship('AttendanceRecord', backref='employee', lazy=True)
@@ -48,6 +49,8 @@ class AttendanceRecord(db.Model):
     clock_in = db.Column(db.DateTime)
     clock_out = db.Column(db.DateTime)
     total_time = db.Column(db.String(20))
+    work_hours = db.Column(db.Float, default=0.0)  # عدد ساعات العمل الفعلية
+    overtime_hours = db.Column(db.Float, default=0.0)  # عدد ساعات العمل الإضافي
     attendance_status = db.Column(db.String(20), default='P')  # P=Present, A=Absent, V=Vacation, T=Transfer, S=Sick, E=Eid, etc.
     terminal_alias_in = db.Column(db.String(100))
     terminal_alias_out = db.Column(db.String(100))
@@ -68,7 +71,9 @@ class SyncLog(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     sync_time = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(20), nullable=False)  # success, error
+    end_time = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), nullable=False)  # success, error, in_progress
+    step = db.Column(db.String(20), nullable=True)  # connect, download, process, save, complete
     records_synced = db.Column(db.Integer, default=0)
     departments_synced = db.Column(db.String(200))
     error_message = db.Column(db.Text)

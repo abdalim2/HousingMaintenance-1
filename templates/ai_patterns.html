@@ -1,0 +1,398 @@
+{% extends 'layout.html' %}
+
+{% block title %}AI Attendance Patterns{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('ai_dashboard') }}">AI Dashboard</a></li>
+            <li class="breadcrumb-item active">Attendance Patterns</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4">
+        <i class="fas fa-search me-2"></i> {{ title }}
+    </h1>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('ai_patterns') }}" class="row g-3">
+                        <div class="col-md-5">
+                            <label for="department" class="form-label">Department</label>
+                            <select name="department" id="department" class="form-select">
+                                <option value="">Select Department</option>
+                                {% for dept in departments %}
+                                    <option value="{{ dept.id }}" {% if selected_dept and selected_dept == dept.id|string %}selected{% endif %}>{{ dept.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="employee" class="form-label">Employee (Optional)</label>
+                            <select name="employee" id="employee" class="form-select">
+                                <option value="">Select Employee (Optional)</option>
+                                {% for emp in employees %}
+                                    <option value="{{ emp.id }}" {% if selected_emp and selected_emp == emp.id|string %}selected{% endif %}>{{ emp.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search me-2"></i> Analyze
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if patterns.message %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i> {{ patterns.message }}
+        </div>
+    {% else %}
+        <div class="row">
+            <!-- Weekday Patterns -->
+            <div class="col-md-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-calendar-week me-2"></i> Weekday Attendance Patterns
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if patterns.weekday_patterns %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Day</th>
+                                            <th>Attendance Rate</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for day in patterns.weekday_patterns %}
+                                            <tr>
+                                                <td>{{ day.weekday }}</td>
+                                                <td>
+                                                    <div class="progress" style="height: 25px;">
+                                                        <div class="progress-bar {% if day.attendance_rate >= 90 %}bg-success{% elif day.attendance_rate >= 75 %}bg-info{% elif day.attendance_rate >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                            role="progressbar" 
+                                                            style="width: {{ day.attendance_rate }}%;" 
+                                                            aria-valuenow="{{ day.attendance_rate }}" 
+                                                            aria-valuemin="0" 
+                                                            aria-valuemax="100">
+                                                            {{ day.attendance_rate }}%
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {% if day.attendance_rate >= 90 %}
+                                                        <span class="badge bg-success">Excellent</span>
+                                                    {% elif day.attendance_rate >= 75 %}
+                                                        <span class="badge bg-info">Good</span>
+                                                    {% elif day.attendance_rate >= 60 %}
+                                                        <span class="badge bg-warning">Average</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Poor</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Visualization -->
+                            <div class="mt-3">
+                                <canvas id="weekdayChart" width="400" height="200"></canvas>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i> No weekday patterns available
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Work Duration Patterns -->
+            <div class="col-md-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock me-2"></i> Work Duration Patterns
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if patterns.work_duration_patterns %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Day</th>
+                                            <th>Avg. Hours</th>
+                                            <th>Variability</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for day in patterns.work_duration_patterns %}
+                                            <tr>
+                                                <td>{{ day.weekday }}</td>
+                                                <td>
+                                                    <strong>{{ day.avg_hours }}</strong> hours
+                                                </td>
+                                                <td>
+                                                    {% if day.std_deviation < 0.5 %}
+                                                        <span class="badge bg-success">Low (±{{ day.std_deviation }}h)</span>
+                                                    {% elif day.std_deviation < 1.0 %}
+                                                        <span class="badge bg-info">Medium (±{{ day.std_deviation }}h)</span>
+                                                    {% else %}
+                                                        <span class="badge bg-warning">High (±{{ day.std_deviation }}h)</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Visualization -->
+                            <div class="mt-3">
+                                <canvas id="durationChart" width="400" height="200"></canvas>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i> No work duration patterns available
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if patterns.absence_patterns %}
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0 text-dark">
+                                <i class="fas fa-calendar-minus me-2"></i> Absence Patterns
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Start Date</th>
+                                            <th>End Date</th>
+                                            <th>Duration</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for absence in patterns.absence_patterns %}
+                                            <tr>
+                                                <td>{{ absence.start_date }}</td>
+                                                <td>{{ absence.end_date }}</td>
+                                                <td>{{ absence.days }} days</td>
+                                                <td>
+                                                    {% if absence.days > 7 %}
+                                                        <span class="badge bg-danger">Extended Absence</span>
+                                                    {% elif absence.days > 3 %}
+                                                        <span class="badge bg-warning">Medium Absence</span>
+                                                    {% else %}
+                                                        <span class="badge bg-info">Short Absence</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="fas fa-lightbulb me-2"></i> Pattern Analysis Insights
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <h5><i class="fas fa-clipboard-list me-2"></i> What This Means:</h5>
+                            <ul>
+                                {% if patterns.weekday_patterns %}
+                                    {% set lowest_day = patterns.weekday_patterns|sort(attribute='attendance_rate')|first %}
+                                    {% set highest_day = patterns.weekday_patterns|sort(attribute='attendance_rate')|last %}
+                                    <li>Attendance is <strong>lowest</strong> on <strong>{{ lowest_day.weekday }}</strong> ({{ lowest_day.attendance_rate }}%)</li>
+                                    <li>Attendance is <strong>highest</strong> on <strong>{{ highest_day.weekday }}</strong> ({{ highest_day.attendance_rate }}%)</li>
+                                {% endif %}
+                                
+                                {% if patterns.work_duration_patterns %}
+                                    {% set longest_day = patterns.work_duration_patterns|sort(attribute='avg_hours')|last %}
+                                    {% set shortest_day = patterns.work_duration_patterns|sort(attribute='avg_hours')|first %}
+                                    <li>Average work hours are <strong>longest</strong> on <strong>{{ longest_day.weekday }}</strong> ({{ longest_day.avg_hours }} hours)</li>
+                                    <li>Average work hours are <strong>shortest</strong> on <strong>{{ shortest_day.weekday }}</strong> ({{ shortest_day.avg_hours }} hours)</li>
+                                {% endif %}
+                                
+                                {% if patterns.absence_patterns %}
+                                    <li>There were <strong>{{ patterns.absence_patterns|length }}</strong> instances of consecutive absences detected</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        
+                        <div class="alert alert-warning mt-3">
+                            <h5><i class="fas fa-bullseye me-2"></i> Recommended Actions:</h5>
+                            <ul>
+                                {% if patterns.weekday_patterns and lowest_day.attendance_rate < 75 %}
+                                    <li>Investigate reasons for low attendance on <strong>{{ lowest_day.weekday }}</strong></li>
+                                {% endif %}
+                                
+                                {% if patterns.work_duration_patterns and longest_day.avg_hours > 9 %}
+                                    <li>Consider workload distribution to reduce long hours on <strong>{{ longest_day.weekday }}</strong></li>
+                                {% endif %}
+                                
+                                {% if patterns.absence_patterns|selectattr('days', 'gt', 5)|list|length > 0 %}
+                                    <li>Review extended absence patterns for potential health or satisfaction issues</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    $(document).ready(function() {
+        // Department change handler - dynamically update employees dropdown
+        $('#department').change(function() {
+            var deptId = $(this).val();
+            $('#employee').empty().append('<option value="">Select Employee (Optional)</option>');
+            
+            if (deptId) {
+                // Submit form to reload with new department
+                $(this).closest('form').submit();
+            }
+        });
+        
+        {% if patterns.weekday_patterns %}
+        // Weekday chart
+        var weekdayCtx = document.getElementById('weekdayChart').getContext('2d');
+        var labels = [];
+        var data = [];
+        var colors = [];
+        
+        {% for day in patterns.weekday_patterns %}
+            labels.push("{{ day.weekday }}");
+            data.push({{ day.attendance_rate }});
+            
+            {% if day.attendance_rate >= 90 %}
+                colors.push('rgba(40, 167, 69, 0.8)'); // success
+            {% elif day.attendance_rate >= 75 %}
+                colors.push('rgba(23, 162, 184, 0.8)'); // info
+            {% elif day.attendance_rate >= 60 %}
+                colors.push('rgba(255, 193, 7, 0.8)'); // warning
+            {% else %}
+                colors.push('rgba(220, 53, 69, 0.8)'); // danger
+            {% endif %}
+        {% endfor %}
+        
+        new Chart(weekdayCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Attendance Rate (%)',
+                    data: data,
+                    backgroundColor: colors,
+                    borderColor: colors.map(c => c.replace('0.8', '1')),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Attendance Rate by Weekday'
+                    }
+                }
+            }
+        });
+        {% endif %}
+        
+        {% if patterns.work_duration_patterns %}
+        // Duration chart
+        var durationCtx = document.getElementById('durationChart').getContext('2d');
+        var durationLabels = [];
+        var durationData = [];
+        var durationErrorBars = [];
+        
+        {% for day in patterns.work_duration_patterns %}
+            durationLabels.push("{{ day.weekday }}");
+            durationData.push({{ day.avg_hours }});
+            durationErrorBars.push({{ day.std_deviation }});
+        {% endfor %}
+        
+        new Chart(durationCtx, {
+            type: 'bar',
+            data: {
+                labels: durationLabels,
+                datasets: [{
+                    label: 'Avg Work Hours',
+                    data: durationData,
+                    backgroundColor: 'rgba(23, 162, 184, 0.6)',
+                    borderColor: 'rgba(23, 162, 184, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value + ' hrs';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Average Work Hours by Day'
+                    }
+                }
+            }
+        });
+        {% endif %}
+    });
+</script>
+{% endblock %}

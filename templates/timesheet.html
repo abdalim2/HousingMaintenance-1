@@ -56,59 +56,102 @@
                         <th rowspan="2" class="text-center align-middle">C No.</th>
                         <th rowspan="2" class="text-center align-middle">NAME</th>
                         <th rowspan="2" class="text-center align-middle">Profession</th>
+                        <th rowspan="2" class="text-center align-middle">Device</th>
                         
                         <!-- Dates header -->
                         {% for date in timesheet_data.dates %}
-                            <th class="text-center">
+                            <th class="text-center {% if date.weekday() in timesheet_data.weekend_days %}font-weight-bold{% endif %}">
                                 {{ date.day }}
                             </th>
                         {% endfor %}
+                        
+                        <!-- Total columns -->
+                        <th rowspan="2" class="text-center align-middle bg-primary">Total Hours</th>
+                        <th rowspan="2" class="text-center align-middle bg-info">Overtime</th>
                     </tr>
                     <tr class="text-center">
                         <!-- Weekday header -->
                         {% for date in timesheet_data.dates %}
-                            <th class="text-center small">
+                            <th class="text-center small {% if date.weekday() in timesheet_data.weekend_days %}font-weight-bold{% endif %}">
                                 {{ date.strftime('%a') }}
                             </th>
                         {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
+                    {% set device_groups = {} %}
+                    
+                    <!-- Group employees by device -->
                     {% for employee in timesheet_data.employees %}
-                        <tr>
-                            <td>{{ employee.emp_code }}</td>
-                            <td>{{ employee.name or employee.name_ar }}</td>
-                            <td>{{ employee.profession }}</td>
-                            
-                            <!-- Attendance status for each day -->
-                            {% for day in employee.attendance %}
-                                <td class="text-center attendance-cell status-{{ day.status }}">
-                                    {% if day.status == 'P' %}
-                                        <i class="fas fa-check text-success"></i>
-                                    {% elif day.status == 'A' %}
-                                        <i class="fas fa-times text-danger"></i>
-                                    {% elif day.status == 'V' %}
-                                        <span class="badge rounded-pill bg-success">V</span>
-                                    {% elif day.status == 'T' %}
-                                        <span class="badge rounded-pill bg-primary">T</span>
-                                    {% elif day.status == 'S' %}
-                                        <span class="badge rounded-pill bg-warning">S</span>
-                                    {% elif day.status == 'E' %}
-                                        <span class="badge rounded-pill bg-info">E</span>
-                                    {% elif day.status == 'W' %}
-                                        <span class="text-muted">W</span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-                        </tr>
-                    {% else %}
-                        <tr>
-                            <td colspan="{{ 3 + timesheet_data.dates|length }}" class="text-center">
-                                No employee data available for the selected period
+                        {% set device = employee.terminal_alias_in|default('Unknown') %}
+                        {% if device not in device_groups %}
+                            {% set _ = device_groups.update({device: []}) %}
+                        {% endif %}
+                        {% set _ = device_groups[device].append(employee) %}
+                    {% endfor %}
+                    
+                    <!-- Display employees grouped by terminal device -->
+                    {% for device, employees in device_groups.items() %}
+                        <!-- Device header row -->
+                        <tr class="bg-secondary">
+                            <td colspan="{{ 4 + timesheet_data.dates|length + 2 }}" class="font-weight-bold">
+                                Terminal Device: {{ device }}
                             </td>
                         </tr>
+                        
+                        <!-- Employees for this device -->
+                        {% for employee in employees %}
+                            <tr>
+                                <td>{{ employee.emp_code }}</td>
+                                <td>{{ employee.name or employee.name_ar }}</td>
+                                <td>{{ employee.profession }}</td>
+                                <td>{{ employee.terminal_alias_in|default('') }}</td>
+                                
+                                <!-- Attendance status for each day -->
+                                {% for day in employee.attendance %}
+                                    <td class="text-center attendance-cell status-{{ day.status }} {% if day.is_weekend %}font-weight-bold{% endif %}">
+                                        {% if day.status == 'P' %}
+                                            {% if day.record %}
+                                                <div class="d-flex flex-column align-items-center">
+                                                    <!-- Horas regulares (máximo 8) -->
+                                                    {% if day.record.work_hours > 0 %}
+                                                        <span class="small text-success">{{ day.record.work_hours|round(1) }}</span>
+                                                    {% endif %}
+                                                    <!-- Horas extra (si hay) -->
+                                                    {% if day.record.overtime_hours > 0 %}
+                                                        <span class="small text-warning">{{ day.record.overtime_hours|round(1) }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <i class="fas fa-check text-success"></i>
+                                            {% endif %}
+                                        {% elif day.status == 'A' %}
+                                            {% if day.is_weekend %}
+                                                <span class="text-muted">W</span>
+                                            {% else %}
+                                                <i class="fas fa-times text-danger"></i>
+                                            {% endif %}
+                                        {% elif day.status == 'V' %}
+                                            <span class="badge rounded-pill bg-success">V</span>
+                                        {% elif day.status == 'T' %}
+                                            <span class="badge rounded-pill bg-primary">T</span>
+                                        {% elif day.status == 'S' %}
+                                            <span class="badge rounded-pill bg-warning">S</span>
+                                        {% elif day.status == 'E' %}
+                                            <span class="badge rounded-pill bg-info">E</span>
+                                        {% elif day.status == 'W' %}
+                                            <span class="text-muted">W</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                                
+                                <!-- Total hours and overtime columns - formato decimal con un decimal -->
+                                <td class="text-center bg-primary">{{ employee.total_work_hours|round(1) }}</td>
+                                <td class="text-center bg-info">{{ employee.total_overtime_hours|round(1) }}</td>
+                            </tr>
+                        {% endfor %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -137,6 +180,10 @@
                     <div class="legend-item">
                         <span class="badge rounded-pill bg-warning">S</span>
                         <span class="legend-text">Sick</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="small text-success">00:00</span>
+                        <span class="legend-text">Total Hours</span>
                     </div>
                     <div class="legend-item">
                         <i class="fas fa-check text-success"></i>

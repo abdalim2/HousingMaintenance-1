@@ -1,0 +1,186 @@
+{% extends 'layout.html' %}
+
+{% block title %}AI Attendance Predictions{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('ai_dashboard') }}">AI Dashboard</a></li>
+            <li class="breadcrumb-item active">Attendance Predictions</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4">
+        <i class="fas fa-chart-line me-2"></i> Attendance Predictions
+    </h1>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('ai_predictions') }}" class="row g-3">
+                        <div class="col-md-6">
+                            <label for="department" class="form-label">Department</label>
+                            <select name="department" id="department" class="form-select" required>
+                                <option value="">Select Department</option>
+                                {% for dept in departments %}
+                                    <option value="{{ dept.id }}" {% if selected_dept and selected_dept.id == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="days" class="form-label">Forecast Period (Days)</label>
+                            <select name="days" id="days" class="form-select">
+                                <option value="3" {% if days == 3 %}selected{% endif %}>3 days</option>
+                                <option value="5" {% if days == 5 %}selected{% endif %}>5 days</option>
+                                <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+                                <option value="14" {% if days == 14 %}selected{% endif %}>14 days</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-calendar-alt me-2"></i> Generate Forecast
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-alt me-2"></i> Attendance Forecast
+                        {% if selected_dept %}
+                            <small class="ms-2">({{ selected_dept.name }})</small>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if forecast.message %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i> {{ forecast.message }}
+                        </div>
+                    {% elif forecast.forecast %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Day</th>
+                                        <th>Predicted Attendance Rate</th>
+                                        <th>Expected Present</th>
+                                        <th>Expected Absent</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for day in forecast.forecast %}
+                                        <tr>
+                                            <td>{{ day.date }}</td>
+                                            <td>{{ day.weekday }}</td>
+                                            <td>
+                                                <div class="progress" style="height: 25px;">
+                                                    <div class="progress-bar {% if day.predicted_attendance_rate >= 90 %}bg-success{% elif day.predicted_attendance_rate >= 75 %}bg-info{% elif day.predicted_attendance_rate >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                        role="progressbar" 
+                                                        style="width: {{ day.predicted_attendance_rate }}%;" 
+                                                        aria-valuenow="{{ day.predicted_attendance_rate }}" 
+                                                        aria-valuemin="0" 
+                                                        aria-valuemax="100">
+                                                        {{ day.predicted_attendance_rate }}%
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>{{ day.predicted_present }} employees</td>
+                                            <td>{{ day.predicted_absent }} employees</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-4">
+                            <h5>Forecast Summary</h5>
+                            <div class="row mt-3">
+                                <div class="col-md-4">
+                                    <div class="card border-0 shadow-sm h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                                            <h5 class="card-title">Total Employees</h5>
+                                            <p class="display-4">{{ forecast.total_employees }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-0 shadow-sm h-100">
+                                        <div class="card-body text-center">
+                                            {% set avg_attendance = (forecast.forecast|map(attribute='predicted_attendance_rate')|sum / forecast.forecast|length)|round(1) %}
+                                            <i class="fas fa-percentage fa-3x {% if avg_attendance >= 90 %}text-success{% elif avg_attendance >= 75 %}text-info{% elif avg_attendance >= 60 %}text-warning{% else %}text-danger{% endif %} mb-3"></i>
+                                            <h5 class="card-title">Average Expected Attendance</h5>
+                                            <p class="display-4">{{ avg_attendance }}%</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-0 shadow-sm h-100">
+                                        <div class="card-body text-center">
+                                            {% set lowest_day = forecast.forecast|sort(attribute='predicted_attendance_rate')|first %}
+                                            <i class="fas fa-calendar-day fa-3x text-danger mb-3"></i>
+                                            <h5 class="card-title">Lowest Attendance Day</h5>
+                                            <p class="display-4">{{ lowest_day.weekday }}</p>
+                                            <p class="text-muted">{{ lowest_day.predicted_attendance_rate }}%</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-circle me-2"></i> Unable to generate forecast. Please ensure you have selected a department with sufficient attendance data.
+                        </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <h5>About Attendance Predictions</h5>
+                        <p>
+                            Our AI system uses machine learning models to predict future attendance based on historical patterns:
+                        </p>
+                        <ul>
+                            <li>Predictions incorporate <strong>day of week patterns</strong>, <strong>seasonal trends</strong>, and <strong>employee-specific behavior</strong></li>
+                            <li>The model is continuously learning and improving as more attendance data becomes available</li>
+                            <li>Predictions are most accurate for departments with substantial historical data</li>
+                        </ul>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-lightbulb me-2"></i> <strong>Note:</strong> These are predictions, not certainties. Use them for planning purposes but be prepared for variations based on unforeseen circumstances.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+
+        // Department change handler
+        $('#department').change(function() {
+            if ($(this).val()) {
+                $('#generateBtn').prop('disabled', false);
+            } else {
+                $('#generateBtn').prop('disabled', true);
+            }
+        });
+    });
+</script>
+{% endblock %}

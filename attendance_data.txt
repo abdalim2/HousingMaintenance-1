@@ -1,0 +1,352 @@
+Employee ID,First Name,Department,Date,Time,Punch State,Device Name
+49491,SALMAN KHAN,HOUSING,2025-04-02,23:16,Check Out,SECURITY-oldwoodcamp
+49491,SALMAN KHAN,HOUSING,2025-04-02,23:16,Check Out,SECURITY-oldwoodcamp
+29820,EJAZ ABDUL,HOUSING,2025-04-02,21:10,Check Out,H-Umsalam-B2
+29820,EJAZ ABDUL,HOUSING,2025-04-02,21:10,Check Out,H-Umsalam-B2
+31714,Abid Ali   Khan,HOUSING,2025-04-02,20:01,Check In,ALAZIZIAH HOUSING
+49916,nadeemmansoori,HOUSING,2025-04-02,19:29,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-02,19:29,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-02,19:29,Check In,H-Umsalam-B2
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-02,18:42,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-02,18:42,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-02,18:42,Check In,Aljuhami Camp
+45768,gemantoro ben saleem sarbeen,HOUSING,2025-04-02,18:35,Check Out,SECURITY-oldwoodcamp
+49499,MOHD ASHWAD,HOUSING,2025-04-02,18:28,Check In,H-Umsalam-B2
+49499,MOHD ASHWAD,HOUSING,2025-04-02,18:28,Check In,H-Umsalam-B2
+49499,MOHD ASHWAD,HOUSING,2025-04-02,18:28,Check In,H-Umsalam-B2
+49499,MOHD ASHWAD,HOUSING,2025-04-02,18:28,Check In,H-Umsalam-B2
+50156,mohammed imteyaj mohmmad,HOUSING,2025-04-02,18:21,Check In,H-Umsalam-B2
+50156,mohammed imteyaj mohmmad,HOUSING,2025-04-02,18:21,Check In,H-Umsalam-B2
+49546,REHAN KHAN,HOUSING,2025-04-02,18:12,Check In,Aljuhami Camp
+49546,REHAN KHAN,HOUSING,2025-04-02,18:12,Check In,Aljuhami Camp
+49546,REHAN KHAN,HOUSING,2025-04-02,18:12,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-02,18:08,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-02,18:08,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-02,18:08,Check In,Aljuhami Camp
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,17:49,Check In,H-Umsalam-B2
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-02,17:17,Check In,HKsauh-R1
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-02,17:17,Check In,HKsauh-R1
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-02,17:17,Check In,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-02,17:17,Check In,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-02,17:17,Check In,H-Umsalam-B2
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-02,17:13,Check In,ALTHOMAMA HOUSING CAMP
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-02,17:13,Check In,ALTHOMAMA HOUSING CAMP
+34207,MOHAMMED RAFIQUE,HOUSING,2025-04-02,17:09,Check In,Malaz-01
+30739,Akbar     Ali,HOUSING,2025-04-02,17:07,Check In,H-Umsalam-B2
+30739,Akbar     Ali,HOUSING,2025-04-02,17:07,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-02,17:07,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-02,17:06,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-02,17:06,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-02,17:06,Check In,H-Umsalam-B2
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-02,16:59,Check In,H-Umsalam-B2
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-02,16:59,Check In,H-Umsalam-B2
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-02,16:58,Check In,H-Umsalam-B2
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-02,16:56,Check In,ALTHOMAMA HOUSING CAMP
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-02,16:56,Check In,ALTHOMAMA HOUSING CAMP
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-02,16:56,Check In,ALTHOMAMA HOUSING CAMP
+14192,Sakur Mohammed Noor Mohammed,HOUSING,2025-04-02,16:52,255,SHARMA-3
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-02,16:49,Check Out,SECURITY-oldwoodcamp
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-02,16:49,Check Out,SECURITY-oldwoodcamp
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-02,16:47,Check In,HKsauh-R1
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-02,16:46,Check In,HKsauh-R1
+27990,Mohammed Arif Gulam Mustufa Kazi,HOUSING,2025-04-02,16:36,Check In,Malaz-01
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-02,16:34,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-02,16:34,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-02,16:34,Check In,ALTHOMAMA HOUSING CAMP
+49112,Mohammed Ayub,HOUSING,2025-04-02,16:30,Check Out,SECURITY-oldwoodcamp
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-02,16:28,Check In,HKsauh-R1
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-02,16:28,Check In,HKsauh-R1
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-02,16:22,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-02,16:22,Check Out,SECURITY-oldwoodcamp
+31714,Abid Ali   Khan,HOUSING,2025-04-02,16:18,Check In,ALAZIZIAH HOUSING
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-02,16:13,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-02,16:13,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-02,16:13,Check In,ALTHOMAMA HOUSING CAMP
+48969,ZAHEER ABBAS,HOUSING,2025-04-02,16:03,Check In,H-A.Khayatcamp-2
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-02,15:57,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-02,15:57,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-02,15:57,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-02,15:54,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-02,15:53,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-02,15:53,Check Out,SECURITY-oldwoodcamp
+32888,MUHSEN MAHDI,HOUSING,2025-04-02,15:37,Check In,H-A.Khayatcamp-2
+29778,Muhammad Kamran Fahim Ud Din,HOUSING,2025-04-02,15:15,Check In,H-A.Khayatcamp-2
+31628,Abubakar Bin   Hasan,HOUSING,2025-04-02,15:11,Check In,ALAZIZIAH HOUSING
+35045,Faheem Raza Bashir Ahmad,HOUSING,2025-04-02,15:10,Check In,ALAZIZIAH HOUSING
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-02,15:08,Check Out,SECURITY-oldwoodcamp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-02,15:08,Check Out,SECURITY-oldwoodcamp
+50082,Usama Jamil Muhammad Jamil Khalid,HOUSING,2025-04-02,15:06,Check In,ALAZIZIAH HOUSING
+49485,MOHD ISRAIL,HOUSING,2025-04-02,15:04,Check In,H-A.Khayatcamp-2
+49481,MOHAMMAD FARMAN,HOUSING,2025-04-02,15:02,Check In,H-A.Khayatcamp-2
+49484,SAHANWAJ IRSAD,HOUSING,2025-04-02,15:02,Check In,H-A.Khayatcamp-2
+33966,Shahfaishal Mohammed  Rafique,HOUSING,2025-04-02,15:02,Check In,ALAZIZIAH HOUSING
+18102,MOHD KANCHAN,HOUSING,2025-04-02,15:02,Check In,H-A.Khayatcamp-2
+49490,RABBANEE MO JAMIL,HOUSING,2025-04-02,15:00,Check In,ALAZIZIAH HOUSING
+30807,Mohammed Arif     Dayar,HOUSING,2025-04-02,14:55,Check In,ALAZIZIAH HOUSING
+28590,Sadrudin     Quresh,HOUSING,2025-04-02,14:06,Check Out,SECURITY-oldwoodcamp
+49499,MOHD ASHWAD,HOUSING,2025-04-02,09:19,Check In,H-Umsalam-B2
+49499,MOHD ASHWAD,HOUSING,2025-04-02,09:19,Check In,H-Umsalam-B2
+28824,ALTAF BISAYATI,HOUSING,2025-04-02,09:07,Check In,H-Umsalam-B2
+28824,ALTAF BISAYATI,HOUSING,2025-04-02,09:07,Check In,H-Umsalam-B2
+49112,Mohammed Ayub,HOUSING,2025-04-02,08:55,Check Out,SECURITY-oldwoodcamp
+49112,Mohammed Ayub,HOUSING,2025-04-02,08:55,Check Out,SECURITY-oldwoodcamp
+49916,nadeemmansoori,HOUSING,2025-04-02,08:50,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-02,08:50,Check In,H-Umsalam-B2
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-02,08:39,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-02,08:39,Check Out,SECURITY-oldwoodcamp
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-02,08:24,Check In,ALTHOMAMA HOUSING CAMP
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-02,08:24,Check In,ALTHOMAMA HOUSING CAMP
+49491,SALMAN KHAN,HOUSING,2025-04-02,08:07,Check Out,SECURITY-oldwoodcamp
+49491,SALMAN KHAN,HOUSING,2025-04-02,08:07,Check Out,SECURITY-oldwoodcamp
+48969,ZAHEER ABBAS,HOUSING,2025-04-02,08:01,Check In,H-A.Khayatcamp-2
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-02,07:56,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-02,07:56,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-02,07:56,Check In,ALTHOMAMA HOUSING CAMP
+31714,Abid Ali   Khan,HOUSING,2025-04-02,07:56,Check In,ALAZIZIAH HOUSING
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-02,07:43,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-02,07:43,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-02,07:43,Check In,Aljuhami Camp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-02,07:37,Check Out,SECURITY-oldwoodcamp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-02,07:37,Check Out,SECURITY-oldwoodcamp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-02,07:37,Check Out,SECURITY-oldwoodcamp
+49237,ASLAM ALI,HOUSING,2025-04-02,07:36,Check Out,SECURITY-oldwoodcamp
+49237,ASLAM ALI,HOUSING,2025-04-02,07:36,Check Out,SECURITY-oldwoodcamp
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-02,07:30,Check Out,SECURITY-oldwoodcamp
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-02,07:30,Check Out,SECURITY-oldwoodcamp
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-02,07:30,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-02,07:30,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-02,07:29,Check In,ALTHOMAMA HOUSING CAMP
+30739,Akbar     Ali,HOUSING,2025-04-02,07:07,Check In,H-Umsalam-B2
+30739,Akbar     Ali,HOUSING,2025-04-02,07:07,Check In,H-Umsalam-B2
+33966,Shahfaishal Mohammed  Rafique,HOUSING,2025-04-02,07:06,Check In,ALAZIZIAH HOUSING
+49546,REHAN KHAN,HOUSING,2025-04-02,07:06,Check In,Aljuhami Camp
+49546,REHAN KHAN,HOUSING,2025-04-02,07:06,Check In,Aljuhami Camp
+49546,REHAN KHAN,HOUSING,2025-04-02,07:06,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-02,07:06,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-02,07:06,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-02,07:06,Check In,Aljuhami Camp
+27990,Mohammed Arif Gulam Mustufa Kazi,HOUSING,2025-04-02,07:05,Check In,Malaz-01
+36048,parwo bn,HOUSING,2025-04-02,07:05,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-02,07:04,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-02,07:04,Check In,H-Umsalam-B2
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-02,07:04,Check In,ALTHOMAMA HOUSING CAMP
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-02,07:04,Check In,ALTHOMAMA HOUSING CAMP
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-02,07:04,Check In,HKsauh-R1
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-02,07:04,Check In,HKsauh-R1
+50082,Usama Jamil Muhammad Jamil Khalid,HOUSING,2025-04-02,07:02,Check In,ALAZIZIAH HOUSING
+49490,RABBANEE MO JAMIL,HOUSING,2025-04-02,07:02,Check In,ALAZIZIAH HOUSING
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-02,07:01,Check In,HKsauh-R1
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-02,07:01,Check In,HKsauh-R1
+29778,Muhammad Kamran Fahim Ud Din,HOUSING,2025-04-02,07:01,Check In,H-A.Khayatcamp-2
+30807,Mohammed Arif     Dayar,HOUSING,2025-04-02,07:00,Check In,ALAZIZIAH HOUSING
+49484,SAHANWAJ IRSAD,HOUSING,2025-04-02,07:00,Check In,H-A.Khayatcamp-2
+49485,MOHD ISRAIL,HOUSING,2025-04-02,06:59,Check In,H-A.Khayatcamp-2
+49481,MOHAMMAD FARMAN,HOUSING,2025-04-02,06:58,Check In,H-A.Khayatcamp-2
+18102,MOHD KANCHAN,HOUSING,2025-04-02,06:57,Check In,H-A.Khayatcamp-2
+32888,MUHSEN MAHDI,HOUSING,2025-04-02,06:56,Check In,ALAZIZIAH HOUSING
+34207,MOHAMMED RAFIQUE,HOUSING,2025-04-02,06:56,Check In,Malaz-01
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-02,06:55,Check In,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-02,06:54,Check In,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-02,06:54,Check In,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-02,06:54,Check In,H-Umsalam-B2
+29820,EJAZ ABDUL,HOUSING,2025-04-02,06:52,Check In,H-Umsalam-B2
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-02,06:52,Check In,HKsauh-R1
+29820,EJAZ ABDUL,HOUSING,2025-04-02,06:52,Check In,H-Umsalam-B2
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-02,06:52,Check In,HKsauh-R1
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-02,06:52,Check In,HKsauh-R1
+28590,Sadrudin     Quresh,HOUSING,2025-04-02,06:52,Check Out,SECURITY-oldwoodcamp
+35045,Faheem Raza Bashir Ahmad,HOUSING,2025-04-02,06:49,Check In,ALAZIZIAH HOUSING
+30739,Akbar     Ali,HOUSING,2025-04-02,06:49,Check Out,H-Umsalam-B2
+31628,Abubakar Bin   Hasan,HOUSING,2025-04-02,06:46,Check In,ALAZIZIAH HOUSING
+29035,Alisher     Bisayati,HOUSING,2025-04-02,06:45,Check Out,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,06:45,Check Out,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-02,06:45,Check Out,H-Umsalam-B2
+45768,gemantoro ben saleem sarbeen,HOUSING,2025-04-02,06:38,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-02,06:36,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-02,06:36,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-02,06:36,Check Out,SECURITY-oldwoodcamp
+14192,Sakur Mohammed Noor Mohammed,HOUSING,2025-04-02,06:34,255,SHARMA-3
+50156,mohammed imteyaj mohmmad,HOUSING,2025-04-02,06:25,Check Out,H-Umsalam-B2
+50156,mohammed imteyaj mohmmad,HOUSING,2025-04-02,06:25,Check Out,H-Umsalam-B2
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-02,05:27,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-02,05:27,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-02,05:27,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-01,23:43,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-01,23:42,Check Out,SECURITY-oldwoodcamp
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-01,23:26,Check Out,H-Umsalam-B2
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,20:30,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,20:30,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,20:30,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,20:30,Check In,ALTHOMAMA HOUSING CAMP
+31714,Abid Ali   Khan,HOUSING,2025-04-01,20:00,Check In,ALAZIZIAH HOUSING
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-01,19:14,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-01,19:14,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-01,19:14,Check Out,SECURITY-oldwoodcamp
+28824,ALTAF BISAYATI,HOUSING,2025-04-01,19:13,Check In,H-Umsalam-B2
+28824,ALTAF BISAYATI,HOUSING,2025-04-01,19:13,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-01,19:05,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-01,19:05,Check In,H-Umsalam-B2
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-01,19:02,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-01,19:02,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-01,19:02,Check In,ALTHOMAMA HOUSING CAMP
+29035,Alisher     Bisayati,HOUSING,2025-04-01,19:00,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,19:00,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,19:00,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,19:00,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,19:00,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,19:00,Check In,H-Umsalam-B2
+30739,Akbar     Ali,HOUSING,2025-04-01,18:41,Check In,H-Umsalam-B2
+30739,Akbar     Ali,HOUSING,2025-04-01,18:41,Check In,H-Umsalam-B2
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-01,18:23,Check In,ALTHOMAMA HOUSING CAMP
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-01,18:23,Check In,ALTHOMAMA HOUSING CAMP
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-01,18:10,Check In,HKsauh-R1
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-01,18:10,Check In,HKsauh-R1
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-01,18:10,Check In,HKsauh-R1
+49502,MOHAMMED IMRAN,HOUSING,2025-04-01,18:03,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-01,18:03,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-01,18:03,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-01,18:03,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-01,18:03,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-01,18:03,Check In,Aljuhami Camp
+45768,gemantoro ben saleem sarbeen,HOUSING,2025-04-01,17:44,Check Out,SECURITY-oldwoodcamp
+29820,EJAZ ABDUL,HOUSING,2025-04-01,17:27,Check In,H-Umsalam-B2
+29820,EJAZ ABDUL,HOUSING,2025-04-01,17:27,Check In,H-Umsalam-B2
+34207,MOHAMMED RAFIQUE,HOUSING,2025-04-01,17:27,Check In,Malaz-01
+27990,Mohammed Arif Gulam Mustufa Kazi,HOUSING,2025-04-01,17:23,Check In,Malaz-01
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-01,17:18,Check In,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-01,17:18,Check In,H-Umsalam-B2
+14192,Sakur Mohammed Noor Mohammed,HOUSING,2025-04-01,17:15,255,SHARMA-4
+36048,parwo bn,HOUSING,2025-04-01,17:08,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-01,17:08,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-01,17:08,Check In,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-01,17:08,Check In,H-Umsalam-B2
+49112,Mohammed Ayub,HOUSING,2025-04-01,17:06,Check Out,SECURITY-oldwoodcamp
+49112,Mohammed Ayub,HOUSING,2025-04-01,17:06,Check Out,SECURITY-oldwoodcamp
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-01,16:53,Check In,ALTHOMAMA HOUSING CAMP
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-01,16:52,Check In,ALTHOMAMA HOUSING CAMP
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-01,16:52,Check In,ALTHOMAMA HOUSING CAMP
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-01,16:28,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-01,16:28,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-01,16:28,Check Out,SECURITY-oldwoodcamp
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-01,16:26,Check In,HKsauh-R1
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-01,16:26,Check In,HKsauh-R1
+31714,Abid Ali   Khan,HOUSING,2025-04-01,16:09,Check In,ALAZIZIAH HOUSING
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-01,16:03,Check In,HKsauh-R1
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-01,16:03,Check In,HKsauh-R1
+48969,ZAHEER ABBAS,HOUSING,2025-04-01,16:02,Check In,H-A.Khayatcamp-2
+35045,Faheem Raza Bashir Ahmad,HOUSING,2025-04-01,16:00,Check In,ALAZIZIAH HOUSING
+32888,MUHSEN MAHDI,HOUSING,2025-04-01,15:44,Check In,H-A.Khayatcamp-2
+49491,SALMAN KHAN,HOUSING,2025-04-01,15:31,Check Out,SECURITY-oldwoodcamp
+49491,SALMAN KHAN,HOUSING,2025-04-01,15:31,Check Out,SECURITY-oldwoodcamp
+28590,Sadrudin     Quresh,HOUSING,2025-04-01,15:29,Check Out,SECURITY-oldwoodcamp
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-01,15:27,Check Out,SECURITY-oldwoodcamp
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-01,15:27,Check Out,SECURITY-oldwoodcamp
+49490,RABBANEE MO JAMIL,HOUSING,2025-04-01,15:21,Check In,ALAZIZIAH HOUSING
+30807,Mohammed Arif     Dayar,HOUSING,2025-04-01,15:14,Check In,ALAZIZIAH HOUSING
+33966,Shahfaishal Mohammed  Rafique,HOUSING,2025-04-01,15:11,Check In,ALAZIZIAH HOUSING
+31628,Abubakar Bin   Hasan,HOUSING,2025-04-01,15:10,Check In,ALAZIZIAH HOUSING
+30807,Mohammed Arif     Dayar,HOUSING,2025-04-01,15:08,Check In,ALAZIZIAH HOUSING
+50082,Usama Jamil Muhammad Jamil Khalid,HOUSING,2025-04-01,15:06,Check In,ALAZIZIAH HOUSING
+49485,MOHD ISRAIL,HOUSING,2025-04-01,15:02,Check In,H-A.Khayatcamp-2
+49484,SAHANWAJ IRSAD,HOUSING,2025-04-01,15:01,Check In,H-A.Khayatcamp-2
+29778,Muhammad Kamran Fahim Ud Din,HOUSING,2025-04-01,15:01,Check In,H-A.Khayatcamp-2
+49481,MOHAMMAD FARMAN,HOUSING,2025-04-01,15:01,Check In,H-A.Khayatcamp-2
+18102,MOHD KANCHAN,HOUSING,2025-04-01,15:01,Check In,H-A.Khayatcamp-2
+49237,ASLAM ALI,HOUSING,2025-04-01,14:25,Check Out,SECURITY-oldwoodcamp
+49237,ASLAM ALI,HOUSING,2025-04-01,14:25,Check Out,SECURITY-oldwoodcamp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-01,14:25,Check Out,SECURITY-oldwoodcamp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-01,14:25,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-01,12:32,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-01,12:32,Check Out,SECURITY-oldwoodcamp
+49498,MOHAMMED MUBARIK,HOUSING,2025-04-01,12:31,Check Out,SECURITY-oldwoodcamp
+28590,Sadrudin     Quresh,HOUSING,2025-04-01,09:49,Check Out,SECURITY-oldwoodcamp
+49112,Mohammed Ayub,HOUSING,2025-04-01,09:44,Check Out,SECURITY-oldwoodcamp
+49112,Mohammed Ayub,HOUSING,2025-04-01,09:44,Check Out,SECURITY-oldwoodcamp
+28824,ALTAF BISAYATI,HOUSING,2025-04-01,09:32,Check Out,SECURITY-oldwoodcamp
+28824,ALTAF BISAYATI,HOUSING,2025-04-01,09:32,Check Out,SECURITY-oldwoodcamp
+14192,Sakur Mohammed Noor Mohammed,HOUSING,2025-04-01,09:07,255,SHARMA-4
+29035,Alisher     Bisayati,HOUSING,2025-04-01,08:42,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,08:42,Check In,H-Umsalam-B2
+29035,Alisher     Bisayati,HOUSING,2025-04-01,08:42,Check In,H-Umsalam-B2
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-01,08:16,Check In,ALTHOMAMA HOUSING CAMP
+30239,Muhammad Bilal Ahmed Hu,HOUSING,2025-04-01,08:16,Check In,ALTHOMAMA HOUSING CAMP
+31714,Abid Ali   Khan,HOUSING,2025-04-01,08:01,Check In,ALAZIZIAH HOUSING
+48969,ZAHEER ABBAS,HOUSING,2025-04-01,08:00,Check In,H-A.Khayatcamp-2
+49916,nadeemmansoori,HOUSING,2025-04-01,07:58,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-01,07:58,Check In,H-Umsalam-B2
+49916,nadeemmansoori,HOUSING,2025-04-01,07:58,Check In,H-Umsalam-B2
+50156,mohammed imteyaj mohmmad,HOUSING,2025-04-01,07:54,Check In,H-Umsalam-B2
+50156,mohammed imteyaj mohmmad,HOUSING,2025-04-01,07:54,Check In,H-Umsalam-B2
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-01,07:45,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-01,07:45,Check In,ALTHOMAMA HOUSING CAMP
+41503,Diyar Ullah Awal Baz Awal Baz,HOUSING,2025-04-01,07:45,Check In,ALTHOMAMA HOUSING CAMP
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-01,07:20,Check In,HKsauh-R1
+50079,Mohammad Shahnawaz Mohammad Maksud Alam,HOUSING,2025-04-01,07:20,Check In,HKsauh-R1
+49499,MOHD ASHWAD,HOUSING,2025-04-01,07:19,Check Out,H-Umsalam-B2
+49499,MOHD ASHWAD,HOUSING,2025-04-01,07:19,Check Out,H-Umsalam-B2
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-01,07:16,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-01,07:15,Check In,Aljuhami Camp
+31563,Latif Kazi Mehboob Kazi,HOUSING,2025-04-01,07:15,Check In,Aljuhami Camp
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,07:12,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,07:12,Check In,ALTHOMAMA HOUSING CAMP
+34238,Jakir Husain  Rafeek,HOUSING,2025-04-01,07:12,Check In,ALTHOMAMA HOUSING CAMP
+34207,MOHAMMED RAFIQUE,HOUSING,2025-04-01,07:11,Check In,Malaz-01
+36048,parwo bn,HOUSING,2025-04-01,07:08,Check Out,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-01,07:08,Check Out,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-01,07:07,Check Out,H-Umsalam-B2
+36048,parwo bn,HOUSING,2025-04-01,07:07,Check Out,H-Umsalam-B2
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-01,07:07,Check Out,SECURITY-oldwoodcamp
+49902,Zubail Chand  Mohammed,HOUSING,2025-04-01,07:07,Check Out,SECURITY-oldwoodcamp
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-01,07:05,Check In,ALTHOMAMA HOUSING CAMP
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-01,07:05,Check In,ALTHOMAMA HOUSING CAMP
+32886,Abdulhakim Saied Fareaa,HOUSING,2025-04-01,07:05,Check In,ALTHOMAMA HOUSING CAMP
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-01,07:05,Check Out,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-01,07:05,Check Out,H-Umsalam-B2
+31524,Shehzad Ahmed Matloob Ahmed,HOUSING,2025-04-01,07:05,Check Out,H-Umsalam-B2
+30739,Akbar     Ali,HOUSING,2025-04-01,07:03,Check Out,H-Umsalam-B2
+30739,Akbar     Ali,HOUSING,2025-04-01,07:03,Check Out,H-Umsalam-B2
+49502,MOHAMMED IMRAN,HOUSING,2025-04-01,07:03,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-01,07:03,Check In,Aljuhami Camp
+49502,MOHAMMED IMRAN,HOUSING,2025-04-01,07:03,Check In,Aljuhami Camp
+31628,Abubakar Bin   Hasan,HOUSING,2025-04-01,07:03,Check In,ALAZIZIAH HOUSING
+30807,Mohammed Arif     Dayar,HOUSING,2025-04-01,07:02,Check In,ALAZIZIAH HOUSING
+49490,RABBANEE MO JAMIL,HOUSING,2025-04-01,07:02,Check In,ALAZIZIAH HOUSING
+33966,Shahfaishal Mohammed  Rafique,HOUSING,2025-04-01,07:01,Check In,ALAZIZIAH HOUSING
+49485,MOHD ISRAIL,HOUSING,2025-04-01,07:00,Check In,H-A.Khayatcamp-2
+49481,MOHAMMAD FARMAN,HOUSING,2025-04-01,07:00,Check In,H-A.Khayatcamp-2
+49484,SAHANWAJ IRSAD,HOUSING,2025-04-01,06:59,Check In,H-A.Khayatcamp-2
+49237,ASLAM ALI,HOUSING,2025-04-01,06:59,Check Out,SECURITY-oldwoodcamp
+49237,ASLAM ALI,HOUSING,2025-04-01,06:59,Check Out,SECURITY-oldwoodcamp
+29778,Muhammad Kamran Fahim Ud Din,HOUSING,2025-04-01,06:59,Check In,H-A.Khayatcamp-2
+18102,MOHD KANCHAN,HOUSING,2025-04-01,06:59,Check In,H-A.Khayatcamp-2
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-01,06:58,Check In,HKsauh-R1
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-01,06:58,Check In,HKsauh-R1
+31557,Gosh Mohammad Mohammad Sabir,HOUSING,2025-04-01,06:58,Check In,HKsauh-R1
+29820,EJAZ ABDUL,HOUSING,2025-04-01,06:57,Check Out,H-Umsalam-B2
+29820,EJAZ ABDUL,HOUSING,2025-04-01,06:57,Check Out,H-Umsalam-B2
+27990,Mohammed Arif Gulam Mustufa Kazi,HOUSING,2025-04-01,06:55,Check In,Malaz-01
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-01,06:53,Check In,HKsauh-R1
+50083,Khurshed Alam Makbul Alam,HOUSING,2025-04-01,06:53,Check In,HKsauh-R1
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-01,06:52,Check Out,SECURITY-oldwoodcamp
+49545,MOHAMMAD YUNUS,HOUSING,2025-04-01,06:51,Check Out,SECURITY-oldwoodcamp
+32888,MUHSEN MAHDI,HOUSING,2025-04-01,06:50,Check In,ALAZIZIAH HOUSING
+50082,Usama Jamil Muhammad Jamil Khalid,HOUSING,2025-04-01,06:46,Check In,ALAZIZIAH HOUSING
+35045,Faheem Raza Bashir Ahmad,HOUSING,2025-04-01,06:42,Check In,ALAZIZIAH HOUSING
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-01,06:34,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-01,06:34,Check Out,SECURITY-oldwoodcamp
+34187,Bilal Kazi  Aehmad Kazi,HOUSING,2025-04-01,06:34,Check Out,SECURITY-oldwoodcamp
+45768,gemantoro ben saleem sarbeen,HOUSING,2025-04-01,06:31,Check Out,SECURITY-oldwoodcamp
+45768,gemantoro ben saleem sarbeen,HOUSING,2025-04-01,06:31,Check Out,SECURITY-oldwoodcamp
+49491,SALMAN KHAN,HOUSING,2025-04-01,06:29,Check Out,SECURITY-oldwoodcamp
+49491,SALMAN KHAN,HOUSING,2025-04-01,06:29,Check Out,SECURITY-oldwoodcamp
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-01,06:28,Check Out,H-Umsalam-B2
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-01,06:28,Check Out,H-Umsalam-B2
+30556,Ayyub Ali Kayam   Khani,HOUSING,2025-04-01,06:28,Check Out,H-Umsalam-B2
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-01,06:00,Check Out,SECURITY-oldwoodcamp
+41852,Abdul Rahman  Bhati,HOUSING,2025-04-01,06:00,Check Out,SECURITY-oldwoodcamp

@@ -1,35 +1,35 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Settings{% endblock %}
+{% block page_title %}{{ t('settings') }}{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-md-6 mb-4">
         <div class="card bg-dark h-100">
             <div class="card-header">
-                <h5 class="card-title mb-0">BioTime Sync Settings</h5>
+                <h5 class="card-title mb-0">{{ t('biotime_settings') }}</h5>
             </div>
             <div class="card-body">
                 <form action="{{ url_for('save_settings') }}" method="post">
                     <div class="mb-3">
-                        <label for="biotime_url" class="form-label">BioTime API URL</label>
+                        <label for="biotime_url" class="form-label">{{ t('api_url') }}</label>
                         <input type="text" class="form-control" id="biotime_url" name="biotime_url" value="{{ sync_settings.api_url }}">
                     </div>
                     
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="biotime_username" class="form-label">Username</label>
+                            <label for="biotime_username" class="form-label">{{ t('username') }}</label>
                             <input type="text" class="form-control" id="biotime_username" name="biotime_username" value="{{ sync_settings.username }}">
                         </div>
                         <div class="col-md-6">
-                            <label for="biotime_password" class="form-label">Password</label>
+                            <label for="biotime_password" class="form-label">{{ t('password') }}</label>
                             <input type="password" class="form-control" id="biotime_password" name="biotime_password" value="********" autocomplete="new-password">
                             <div class="form-text">Leave as '********' to keep current password</div>
                         </div>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="sync_interval" class="form-label">Sync Interval</label>
+                        <label for="sync_interval" class="form-label">{{ t('sync_interval') }}</label>
                         <select class="form-select" id="sync_interval" name="sync_interval">
                             <option value="1" {% if sync_settings.interval == '1' %}selected{% endif %}>Every 1 hour</option>
                             <option value="2" {% if sync_settings.interval == '2' %}selected{% endif %}>Every 2 hours</option>
@@ -41,63 +41,127 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="departments" class="form-label">Departments to Sync (comma-separated IDs)</label>
+                        <label for="departments" class="form-label">{{ t('departments') }} (comma-separated IDs)</label>
                         <input type="text" class="form-control" id="departments" name="departments" value="{{ sync_settings.departments }}">
                         <div class="form-text">Example: 11,6,3,18,15,19,23,10,9,5,4,26,21</div>
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label">نطاق التاريخ (Date Range)</label>
+                        <label class="form-label">{{ t('date_range') }}</label>
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-floating mb-2">
-                                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ sync_settings.start_date }}" dir="rtl">
-                                    <label for="start_date">تاريخ البداية (Start Date)</label>
+                                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ sync_settings.start_date }}" dir="{{ get_dir() }}">
+                                    <label for="start_date">{{ t('start_date') }}</label>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-floating mb-2">
-                                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ sync_settings.end_date }}" dir="rtl">
-                                    <label for="end_date">تاريخ النهاية (End Date)</label>
+                                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ sync_settings.end_date }}" dir="{{ get_dir() }}">
+                                    <label for="end_date">{{ t('end_date') }}</label>
                                 </div>
                             </div>
                         </div>
-                        <div class="form-text text-end">حدد التاريخ للمزامنة</div>
+                    </div>
+                    
+                    <!-- Language Settings -->
+                    <div class="mb-3">
+                        <label for="language" class="form-label">{{ t('language') }}</label>
+                        <div class="d-flex">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="language" id="lang_en" value="en" {% if sync_settings.language == 'en' %}checked{% endif %}>
+                                <label class="form-check-label" for="lang_en">
+                                    <span class="me-1">🇬🇧</span> {{ t('english') }}
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="language" id="lang_ar" value="ar" {% if sync_settings.language == 'ar' %}checked{% endif %}>
+                                <label class="form-check-label" for="lang_ar">
+                                    <span class="me-1">🇸🇦</span> {{ t('arabic') }}
+                                </label>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label">Sync Status</label>
-                        <div class="d-flex align-items-center">
-                            {% if last_sync and last_sync.status == 'success' %}
-                                <span class="badge bg-success me-2"><i class="fas fa-check"></i></span>
-                                <span>Last sync successful at {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
-                            {% elif last_sync and last_sync.status == 'error' %}
-                                <span class="badge bg-danger me-2"><i class="fas fa-times"></i></span>
-                                <span>Last sync failed at {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
-                            {% elif last_sync and last_sync.status == 'partial' %}
-                                <span class="badge bg-warning me-2"><i class="fas fa-exclamation-triangle"></i></span>
-                                <span>Last sync partially successful at {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>
-                                <span>No sync data available</span>
+                        <label class="form-label">{{ t('sync_status') }}</label>
+                        <div id="sync-status-container">
+                            <div class="d-flex align-items-center">
+                                {% if last_sync and last_sync.status == 'success' %}
+                                    <span class="badge bg-success me-2"><i class="fas fa-check"></i></span>
+                                    <span>{{ t('last_sync') }}: {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                {% elif last_sync and last_sync.status == 'error' %}
+                                    <span class="badge bg-danger me-2"><i class="fas fa-times"></i></span>
+                                    <span>{{ t('last_sync') }}: {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                {% elif last_sync and last_sync.status == 'partial' %}
+                                    <span class="badge bg-warning me-2"><i class="fas fa-exclamation-triangle"></i></span>
+                                    <span>{{ t('last_sync') }}: {{ last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                {% elif last_sync and last_sync.status == 'in_progress' %}
+                                    <span class="badge bg-primary me-2"><i class="fas fa-sync-alt fa-spin"></i></span>
+                                    <span>Synchronization in progress...</span>
+                                {% else %}
+                                    <span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>
+                                    <span>No sync data available</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if last_sync and last_sync.status == 'in_progress' %}
+                            <div class="progress mt-2" style="height: 25px;">
+                                <div id="sync-progress-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">Connecting to BioTime...</div>
+                            </div>
+                            
+                            <!-- زر إلغاء المزامنة -->
+                            <form action="{{ url_for('cancel_sync') }}" method="post" class="mt-2">
+                                <button type="submit" class="btn btn-danger" id="cancel-sync-btn">
+                                    <i class="fas fa-times-circle"></i> إلغاء المزامنة
+                                </button>
+                            </form>
+                            {% endif %}
+                            
+                            <div id="sync-steps" class="mt-2 d-none">
+                                <div class="d-flex flex-column">
+                                    <div id="step-connect" class="d-flex align-items-center mb-1">
+                                        <span id="connect-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
+                                        <span>الاتصال بنظام البصمة (Connecting to BioTime)</span>
+                                    </div>
+                                    <div id="step-download" class="d-flex align-items-center mb-1">
+                                        <span id="download-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
+                                        <span>تحميل البيانات (Downloading data)</span>
+                                    </div>
+                                    <div id="step-process" class="d-flex align-items-center mb-1">
+                                        <span id="process-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
+                                        <span>معالجة البيانات (Processing data)</span>
+                                    </div>
+                                    <div id="step-save" class="d-flex align-items-center mb-1">
+                                        <span id="save-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
+                                        <span>حفظ في قاعدة البيانات (Saving to database)</span>
+                                    </div>
+                                    <div id="step-complete" class="d-flex align-items-center">
+                                        <span id="complete-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
+                                        <span>إكمال المزامنة (Sync complete)</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {% if last_sync and last_sync.status != 'success' and last_sync.error_message %}
+                                <div class="alert alert-danger mt-2">
+                                    <h6>Error Details:</h6>
+                                    <pre class="mb-0">{{ last_sync.error_message }}</pre>
+                                </div>
                             {% endif %}
                         </div>
-                        
-                        {% if last_sync and last_sync.status != 'success' and last_sync.error_message %}
-                            <div class="alert alert-danger mt-2">
-                                <h6>Error Details:</h6>
-                                <pre class="mb-0">{{ last_sync.error_message }}</pre>
-                            </div>
-                        {% endif %}
                     </div>
                     
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary flex-fill">
-                            <i class="fas fa-save"></i> Save Settings
+                            <i class="fas fa-save"></i> {{ t('save_settings') }}
                         </button>
                         <button type="submit" class="btn btn-success flex-fill" formaction="{{ url_for('trigger_sync') }}">
-                            <i class="fas fa-sync-alt"></i> Save & Sync Now
+                            <i class="fas fa-sync-alt"></i> {{ t('sync_now') }}
                         </button>
+                        <a href="{{ url_for('sync_results') }}" class="btn btn-info flex-fill">
+                            <i class="fas fa-table"></i> {{ t('records_synced') }}
+                        </a>
                     </div>
                 </form>
             </div>
@@ -308,6 +372,93 @@
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
         
+        // Sync Now button handling - تعديل طريقة معالجة زر المزامنة
+        const syncNowBtn = document.querySelector('button[formaction="{{ url_for("trigger_sync") }}"]');
+        if (syncNowBtn) {
+            syncNowBtn.addEventListener('click', function(e) {
+                // عدم منع السلوك الافتراضي للنموذج - لنرى النتيجة أولاً
+                // e.preventDefault();
+                
+                // Show sync steps
+                const syncStepsEl = document.getElementById('sync-steps');
+                if (syncStepsEl) {
+                    syncStepsEl.classList.remove('d-none');
+                }
+                
+                // Update the status display
+                updateSyncStatus('in_progress', 'جاري بدء المزامنة...');
+                
+                // Set all steps to waiting status
+                setStepStatus('connect', 'pending');
+                setStepStatus('download', 'waiting');
+                setStepStatus('process', 'waiting');
+                setStepStatus('save', 'waiting');
+                setStepStatus('complete', 'waiting');
+            });
+        }
+        
+        // File upload form handling
+        const uploadForm = document.querySelector('form[action="{{ url_for("upload_sync") }}"]');
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Show sync steps for upload
+                const syncStepsEl = document.getElementById('sync-steps');
+                syncStepsEl.classList.remove('d-none');
+                
+                // Update status display
+                updateSyncStatus('in_progress', 'Processing uploaded file...');
+                
+                // Set steps status for upload
+                setStepStatus('connect', 'success');
+                setStepStatus('download', 'success');
+                setStepStatus('process', 'active');
+                setStepStatus('save', 'waiting');
+                setStepStatus('complete', 'waiting');
+                updateProgressBar(50, 'Processing uploaded file...');
+                
+                // Submit the form
+                const formData = new FormData(this);
+                
+                fetch("{{ url_for('upload_sync') }}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).then(response => {
+                    return response.json();
+                }).then(data => {
+                    console.log('Upload response:', data);
+                    
+                    // Handle completed upload
+                    if (data.status === 'success') {
+                        setStepStatus('process', 'success');
+                        setStepStatus('save', 'active');
+                        updateProgressBar(75, 'Saving to database...');
+                        
+                        setTimeout(() => {
+                            setStepStatus('save', 'success');
+                            setStepStatus('complete', 'success');
+                            updateProgressBar(100, 'Complete');
+                            updateSyncStatus('success', `Processed ${data.records} records successfully`);
+                            
+                            // Reload the page after 2 seconds
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        }, 1000);
+                    } else {
+                        failSyncAnimation(data.error || 'Failed to process file');
+                    }
+                }).catch(error => {
+                    console.error('Upload error:', error);
+                    failSyncAnimation('Connection error');
+                });
+            });
+        }
+        
         // Save appearance settings button
         document.getElementById('save-appearance-settings').addEventListener('click', function() {
             const form = document.getElementById('appearance-settings-form');
@@ -384,7 +535,252 @@
                 }
             }
         });
+        
+        // Check for ongoing sync on page load
+        checkSyncStatus();
     });
+    
+    // Helper functions for sync status
+    function updateSyncStatus(status, message) {
+        const container = document.getElementById('sync-status-container');
+        if (!container) return;
+        
+        const statusHTML = `
+            <div class="d-flex align-items-center">
+                ${getStatusBadgeHTML(status)}
+                <span>${message || getStatusMessage(status)}</span>
+            </div>
+        `;
+        
+        // Update only the status part
+        const firstChild = container.querySelector('.d-flex.align-items-center');
+        if (firstChild) {
+            firstChild.outerHTML = statusHTML;
+        } else {
+            container.insertAdjacentHTML('afterbegin', statusHTML);
+        }
+        
+        // Add progress bar if in progress
+        if (status === 'in_progress' && !document.getElementById('sync-progress-bar')) {
+            const progressHTML = `
+                <div class="progress mt-2" style="height: 25px;">
+                    <div id="sync-progress-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" 
+                        role="progressbar" style="width: 10%;" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">
+                        Starting synchronization...
+                    </div>
+                </div>
+            `;
+            firstChild.insertAdjacentHTML('afterend', progressHTML);
+        }
+    }
+    
+    function getStatusBadgeHTML(status) {
+        switch(status) {
+            case 'success':
+                return '<span class="badge bg-success me-2"><i class="fas fa-check"></i></span>';
+            case 'error':
+                return '<span class="badge bg-danger me-2"><i class="fas fa-times"></i></span>';
+            case 'partial':
+                return '<span class="badge bg-warning me-2"><i class="fas fa-exclamation-triangle"></i></span>';
+            case 'in_progress':
+                return '<span class="badge bg-primary me-2"><i class="fas fa-sync-alt fa-spin"></i></span>';
+            default:
+                return '<span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>';
+        }
+    }
+    
+    function getStatusMessage(status) {
+        switch(status) {
+            case 'success':
+                return 'Synchronization completed successfully';
+            case 'error':
+                return 'Synchronization failed';
+            case 'partial':
+                return 'Synchronization partially completed';
+            case 'in_progress':
+                return 'Synchronization in progress...';
+            default:
+                return 'No sync data available';
+        }
+    }
+    
+    function updateProgressBar(percent, message) {
+        const progressBar = document.getElementById('sync-progress-bar');
+        if (!progressBar) return;
+        
+        progressBar.style.width = `${percent}%`;
+        progressBar.setAttribute('aria-valuenow', percent);
+        if (message) {
+            progressBar.textContent = message;
+        }
+    }
+    
+    function setStepStatus(step, status) {
+        const stepEl = document.getElementById(`step-${step}`);
+        const iconEl = document.getElementById(`${step}-icon`);
+        if (!stepEl || !iconEl) return;
+        
+        // Remove existing status classes
+        iconEl.classList.remove('bg-secondary', 'bg-primary', 'bg-success', 'bg-warning', 'bg-danger');
+        
+        // Add new status class and icon
+        switch(status) {
+            case 'active':
+                iconEl.classList.add('bg-primary');
+                iconEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                break;
+            case 'success':
+                iconEl.classList.add('bg-success');
+                iconEl.innerHTML = '<i class="fas fa-check"></i>';
+                break;
+            case 'warning':
+                iconEl.classList.add('bg-warning');
+                iconEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+                break;
+            case 'error':
+                iconEl.classList.add('bg-danger');
+                iconEl.innerHTML = '<i class="fas fa-times"></i>';
+                break;
+            case 'pending':
+                iconEl.classList.add('bg-primary');
+                iconEl.innerHTML = '<i class="fas fa-clock"></i>';
+                break;
+            case 'waiting':
+            default:
+                iconEl.classList.add('bg-secondary');
+                iconEl.innerHTML = '<i class="fas fa-circle"></i>';
+                break;
+        }
+    }
+    
+    function simulateSyncProgress() {
+        // This function simulates the sync progress steps
+        // In a real implementation, this would be replaced by server-sent events
+        setTimeout(() => {
+            setStepStatus('connect', 'success');
+            setStepStatus('download', 'active');
+            updateProgressBar(40, 'Downloading attendance data...');
+            
+            setTimeout(() => {
+                setStepStatus('download', 'success');
+                setStepStatus('process', 'active');
+                updateProgressBar(60, 'Processing attendance data...');
+                
+                setTimeout(() => {
+                    setStepStatus('process', 'success');
+                    setStepStatus('save', 'active');
+                    updateProgressBar(80, 'Saving to database...');
+                    
+                    setTimeout(() => {
+                        // At this point, the server response should have come back
+                        // but we'll handle it here as a fallback
+                        checkSyncResult();
+                    }, 3000);
+                }, 3000);
+            }, 5000);
+        }, 3000);
+    }
+    
+    function completeSyncAnimation(data) {
+        setStepStatus('save', 'success');
+        setStepStatus('complete', 'success');
+        updateProgressBar(100, 'Sync completed successfully');
+        
+        let message = 'Synchronization completed successfully';
+        if (data && data.records) {
+            message += ` (${data.records} records synced)`;
+        }
+        
+        updateSyncStatus('success', message);
+        
+        // Reload the page after 2 seconds to show updated stats
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    }
+    
+    function failSyncAnimation(errorMessage) {
+        setStepStatus('save', 'error');
+        setStepStatus('complete', 'error');
+        updateProgressBar(100, 'Sync failed');
+        updateSyncStatus('error', errorMessage || 'Synchronization failed');
+        
+        // Add error message display
+        const container = document.getElementById('sync-status-container');
+        if (container && errorMessage) {
+            container.innerHTML += `
+                <div class="alert alert-danger mt-2">
+                    <h6>Error Details:</h6>
+                    <pre class="mb-0">${errorMessage}</pre>
+                </div>
+            `;
+        }
+    }
+    
+    function checkSyncStatus() {
+        // Check if there's an ongoing sync when the page loads
+        fetch("{{ url_for('check_sync_status') }}", {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(response => {
+            return response.json();
+        }).then(data => {
+            if (data.status === 'in_progress') {
+                // Show that sync is in progress
+                const syncStepsEl = document.getElementById('sync-steps');
+                syncStepsEl.classList.remove('d-none');
+                
+                updateSyncStatus('in_progress', data.message || 'Synchronization in progress...');
+                updateProgressBar(data.progress || 50, data.progress_message || 'Syncing data...');
+                
+                // Set step status
+                if (data.step) {
+                    const steps = ['connect', 'download', 'process', 'save', 'complete'];
+                    const currentStepIndex = steps.indexOf(data.step);
+                    
+                    for (let i = 0; i < steps.length; i++) {
+                        if (i < currentStepIndex) {
+                            setStepStatus(steps[i], 'success');
+                        } else if (i === currentStepIndex) {
+                            setStepStatus(steps[i], 'active');
+                        } else {
+                            setStepStatus(steps[i], 'waiting');
+                        }
+                    }
+                }
+                
+                // Poll for updates
+                setTimeout(checkSyncStatus, 2000);
+            }
+        }).catch(error => {
+            console.error('Error checking sync status:', error);
+        });
+    }
+    
+    function checkSyncResult() {
+        fetch("{{ url_for('check_sync_status') }}", {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(response => {
+            return response.json();
+        }).then(data => {
+            if (data.status === 'success') {
+                completeSyncAnimation(data);
+            } else if (data.status === 'error') {
+                failSyncAnimation(data.error);
+            } else if (data.status === 'in_progress') {
+                // Still in progress, check again later
+                setTimeout(checkSyncResult, 2000);
+            }
+        }).catch(error => {
+            console.error('Error checking sync result:', error);
+            failSyncAnimation('Error checking sync status');
+        });
+    }
     
     function applyColorSettings(settings) {
         // In a real implementation, this would update CSS variables or styles

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr" data-bs-theme="dark">
+<html lang="{{ g.language }}" dir="{{ get_dir() }}" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance Tracking System</title>
+    <title>{{ t('app_title') }}</title>
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <!-- Font Awesome for icons -->
@@ -18,44 +18,61 @@
             <div class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
                 <div class="position-sticky pt-3">
                     <div class="text-center mb-4">
-                        <h3 class="text-primary">Attendance System</h3>
+                        <h3 class="text-primary">{{ t('app_title') }}</h3>
                     </div>
                     <ul class="nav flex-column">
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path == '/' else '' }}" href="{{ url_for('index') }}">
                                 <i class="fas fa-tachometer-alt me-2"></i>
-                                Dashboard
+                                {{ t('dashboard') }}
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path.startswith('/timesheet') else '' }}" href="{{ url_for('timesheet') }}">
                                 <i class="fas fa-calendar-alt me-2"></i>
-                                Monthly Timesheet
+                                {{ t('monthly_timesheet') }}
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path.startswith('/departments') else '' }}" href="{{ url_for('departments') }}">
                                 <i class="fas fa-building me-2"></i>
-                                Departments
+                                {{ t('departments') }}
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path.startswith('/settings') else '' }}" href="{{ url_for('settings') }}">
                                 <i class="fas fa-cog me-2"></i>
-                                Settings
+                                {{ t('settings') }}
                             </a>
                         </li>
                     </ul>
                     
                     <hr>
                     
-                    <div class="px-3 mt-4">
+                    <!-- Language Selector -->
+                    <div class="px-3 mb-4">
+                        <div class="small text-muted mb-2">
+                            {{ t('language') }}
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <a href="{{ url_for('change_language', language='en', next=request.path) }}" 
+                               class="btn btn-sm {{ 'btn-primary' if g.language == 'en' else 'btn-outline-secondary' }} me-2">
+                                English
+                            </a>
+                            <a href="{{ url_for('change_language', language='ar', next=request.path) }}" 
+                               class="btn btn-sm {{ 'btn-primary' if g.language == 'ar' else 'btn-outline-secondary' }}">
+                                العربية
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="px-3 mt-2">
                         <div class="small text-muted">
-                            BioTime Sync Status:
+                            {{ t('sync_status') }}:
                         </div>
                         <div id="sync-status" class="d-flex align-items-center mt-2">
                             <span class="badge bg-success me-2"><i class="fas fa-sync-alt"></i></span>
-                            <span>Connected</span>
+                            <span>{{ t('connected') }}</span>
                         </div>
                     </div>
                 </div>

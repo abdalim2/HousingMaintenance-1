@@ -19,6 +19,24 @@ def get_month_name(month_num):
     """Convert month number to name"""
     return calendar.month_name[int(month_num)]
 
+def get_day_name(weekday):
+    """
+    Get day name in English and Arabic based on weekday number (0-6, Monday is 0)
+    
+    Args:
+        weekday: Integer representing day of week (0=Monday, 6=Sunday)
+        
+    Returns:
+        String with day name
+    """
+    days_en = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    days_ar = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']
+    
+    if 0 <= weekday <= 6:
+        return f"{days_en[weekday]} ({days_ar[weekday]})"
+    else:
+        return "Unknown"
+
 def get_month_days(year, month):
     """
     Get number of days in month based on company's fiscal calendar
@@ -116,6 +134,7 @@ def generate_timesheet(year, month, department_id=None):
     """
     # Import here to avoid circular imports
     from models import Department, Employee, AttendanceRecord
+    from flask import session
     
     try:
         year = int(year)
@@ -157,6 +176,16 @@ def generate_timesheet(year, month, department_id=None):
         attendance_by_employee = defaultdict(dict)
         for record in attendance_records:
             attendance_by_employee[record.employee_id][record.date] = record
+            
+        # Get weekend days from user settings
+        weekend_days = []
+        if 'ui_settings' in session and 'weekend_days' in session['ui_settings']:
+            weekend_days = [int(day) for day in session['ui_settings']['weekend_days']]
+        else:
+            # Default to Friday and Saturday if not set
+            weekend_days = [4, 5]  # 4=Friday, 5=Saturday in Python's weekday system (0=Monday)
+            
+        logger.info(f"Using weekend days: {weekend_days}")
         
         # Build employee rows for the timesheet
         employee_rows = []
@@ -172,17 +201,21 @@ def generate_timesheet(year, month, department_id=None):
                     status = record.attendance_status
                 else:
                     # If no record, determine if it's a weekend or future date
-                    if day.weekday() >= 5:  # Saturday or Sunday
+                    if day.weekday() in weekend_days:  # Using the weekend days from settings
                         status = 'W'  # Weekend
                     elif day > date.today():
                         status = ''  # Future date
                     else:
                         status = 'A'  # Absent
                 
+                # Add extra information for weekend days
+                is_weekend = (day.weekday() in weekend_days)
+                
                 attendance_data.append({
                     'date': day,
                     'status': status,
-                    'record': record
+                    'record': record,
+                    'is_weekend': is_weekend  # Flag for weekend styling
                 })
             
             # Get department name
@@ -192,6 +225,31 @@ def generate_timesheet(year, month, department_id=None):
                 if dept:
                     dept_name = dept.name
             
+            # جمع معلومات عن أجهزة البصمة المستخدمة
+            devices = set()
+            terminal_alias_in = None
+            
+            # حساب إجمالي ساعات العمل والساعات الإضافية
+            total_work_hours = 0
+            total_overtime_hours = 0
+            
+            for day_data in attendance_data:
+                record = day_data.get('record')
+                if record:
+                    # جمع معلومات أجهزة البصمة
+                    if record.terminal_alias_in:
+                        devices.add(record.terminal_alias_in)
+                    if record.terminal_alias_out:
+                        devices.add(record.terminal_alias_out)
+                    
+                    # حساب المجاميع
+                    total_work_hours += record.work_hours or 0
+                    total_overtime_hours += record.overtime_hours or 0
+            
+            # استخدام أول جهاز بصمة كجهاز افتراضي للموظف
+            if devices:
+                terminal_alias_in = sorted(devices)[0]  # استخدام أول جهاز بالترتيب الأبجدي
+            
             employee_rows.append({
                 'id': employee.id,
                 'emp_code': employee.emp_code,
@@ -199,8 +257,15 @@ def generate_timesheet(year, month, department_id=None):
                 'name_ar': employee.name_ar,
                 'profession': employee.profession,
                 'department': dept_name,
-                'attendance': attendance_data
+                'attendance': attendance_data,
+                'terminal_alias_in': terminal_alias_in,  # إضافة معلومات جهاز البصمة الأساسي
+                'devices': list(devices),  # قائمة بجميع أجهزة البصمة المستخدمة
+                'total_work_hours': total_work_hours,  # إجمالي ساعات العمل
+                'total_overtime_hours': total_overtime_hours  # إجمالي الساعات الإضافية
             })
+        
+        # ترتيب الموظفين حسب جهاز البصمة
+        employee_rows.sort(key=lambda x: (x.get('terminal_alias_in') or 'Unknown'))
         
         # Get month period data if available
         from models import MonthPeriod
@@ -225,7 +290,8 @@ def generate_timesheet(year, month, department_id=None):
             'start_date': start_date,
             'end_date': end_date,
             'working_days': working_days,
-            'working_hours': working_hours
+            'working_hours': working_hours,
+            'weekend_days': weekend_days  # Include weekend days for reference
         }
         
         return timesheet_data
