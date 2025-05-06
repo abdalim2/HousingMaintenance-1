@@ -166,6 +166,108 @@
         </div>
     </div>
 </div>
+
+<!-- AI Analytics Section -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card bg-dark border-success">
+            <div class="card-header bg-dark border-success">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-robot me-2"></i> تحليلات الذكاء الاصطناعي (AI Analytics)
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="card bg-dark border-primary h-100">
+                            <div class="card-header bg-dark border-primary">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-exclamation-triangle me-2"></i> كشف الانماط غير العادية
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text text-muted">
+                                    استخدم الذكاء الاصطناعي لتحديد أنماط الحضور غير العادية والاستثناءات في بيانات الحضور
+                                </p>
+                                <div class="d-grid">
+                                    <a href="{{ url_for('ai_anomalies') }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-search me-2"></i> عرض التحليل
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 mb-4">
+                        <div class="card bg-dark border-warning h-100">
+                            <div class="card-header bg-dark border-warning">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-lightbulb me-2"></i> توصيات الحضور والانصراف
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text text-muted">
+                                    الحصول على توصيات ذكية لتحسين سياسات الحضور والاستفادة من البيانات التاريخية
+                                </p>
+                                <div class="d-grid">
+                                    <a href="{{ url_for('ai_recommendations') }}" class="btn btn-sm btn-outline-warning">
+                                        <i class="fas fa-lightbulb me-2"></i> عرض التوصيات
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 mb-4">
+                        <div class="card bg-dark border-info h-100">
+                            <div class="card-header bg-dark border-info">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-chart-line me-2"></i> التنبؤ بالحضور
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text text-muted">
+                                    استخدام التعلم الآلي للتنبؤ بأنماط الحضور المستقبلية بناءً على البيانات التاريخية
+                                </p>
+                                <div class="d-grid">
+                                    <a href="{{ url_for('ai_predictions') }}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-calendar-alt me-2"></i> عرض التوقعات
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 mb-4">
+                        <div class="card bg-dark border-success h-100">
+                            <div class="card-header bg-dark border-success">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-sitemap me-2"></i> تجميع الموظفين حسب السلوك
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text text-muted">
+                                    استخدام خوارزميات التعلم غير الموجه لتجميع الموظفين بناءً على أنماط الحضور المتشابهة
+                                </p>
+                                <div class="d-grid">
+                                    <a href="{{ url_for('ai_clustering') }}" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-users me-2"></i> عرض المجموعات
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('ai_dashboard') }}" class="btn btn-success">
+                        <i class="fas fa-chart-bar me-2"></i> عرض لوحة تحكم الذكاء الاصطناعي الكاملة
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

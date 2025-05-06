@@ -4,7 +4,7 @@
 
 {% block header_actions %}
 <div class="btn-group me-2">
-    <form id="timesheet-filter-form" class="d-flex gap-2">
+    <form id="timesheet-filter-form" class="d-flex gap-2" data-action="{{ url_for('timesheet') }}">
         <select class="form-select form-select-sm" id="year-select" name="year">
             <option value="2024" {% if selected_year == '2024' %}selected{% endif %}>2024</option>
             <option value="2025" {% if selected_year == '2025' %}selected{% endif %}>2025</option>
@@ -56,7 +56,6 @@
                         <th rowspan="2" class="text-center align-middle">C No.</th>
                         <th rowspan="2" class="text-center align-middle">NAME</th>
                         <th rowspan="2" class="text-center align-middle">Profession</th>
-                        <th rowspan="2" class="text-center align-middle">Device</th>
                         
                         <!-- Dates header -->
                         {% for date in timesheet_data.dates %}
@@ -94,8 +93,8 @@
                     {% for device, employees in device_groups.items() %}
                         <!-- Device header row -->
                         <tr class="bg-secondary">
-                            <td colspan="{{ 4 + timesheet_data.dates|length + 2 }}" class="font-weight-bold">
-                                Terminal Device: {{ device }}
+                            <td colspan="{{ 3 + timesheet_data.dates|length + 2 }}" class="font-weight-bold">
+                                {{ device }}
                             </td>
                         </tr>
                         
@@ -105,21 +104,37 @@
                                 <td>{{ employee.emp_code }}</td>
                                 <td>{{ employee.name or employee.name_ar }}</td>
                                 <td>{{ employee.profession }}</td>
-                                <td>{{ employee.terminal_alias_in|default('') }}</td>
                                 
                                 <!-- Attendance status for each day -->
                                 {% for day in employee.attendance %}
-                                    <td class="text-center attendance-cell status-{{ day.status }} {% if day.is_weekend %}font-weight-bold{% endif %}">
+                                    <td class="text-center attendance-cell status-{{ day.status }} {% if day.is_weekend %}font-weight-bold{% endif %}"
+                                        {% if day.record %}
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-placement="top" 
+                                            title="Clock In: {{ day.record.clock_in.strftime('%H:%M') if day.record.clock_in else 'N/A' }}&#10;Clock Out: {{ day.record.clock_out.strftime('%H:%M') if day.record.clock_out else 'N/A' }}&#10;Total Hours: {{ day.record.work_hours + day.record.overtime_hours }}"
+                                        {% endif %}>
                                         {% if day.status == 'P' %}
                                             {% if day.record %}
                                                 <div class="d-flex flex-column align-items-center">
                                                     <!-- Horas regulares (máximo 8) -->
                                                     {% if day.record.work_hours > 0 %}
-                                                        <span class="small text-success">{{ day.record.work_hours|round(1) }}</span>
+                                                        <span class="small text-success">
+                                                            {% if day.record.work_hours == day.record.work_hours|int %}
+                                                                {{ day.record.work_hours|int }}
+                                                            {% else %}
+                                                                {{ day.record.work_hours|round(1) }}
+                                                            {% endif %}
+                                                        </span>
                                                     {% endif %}
                                                     <!-- Horas extra (si hay) -->
                                                     {% if day.record.overtime_hours > 0 %}
-                                                        <span class="small text-warning">{{ day.record.overtime_hours|round(1) }}</span>
+                                                        <span class="small text-warning">
+                                                            {% if day.record.overtime_hours == day.record.overtime_hours|int %}
+                                                                {{ day.record.overtime_hours|int }}
+                                                            {% else %}
+                                                                {{ day.record.overtime_hours|round(1) }}
+                                                            {% endif %}
+                                                        </span>
                                                     {% endif %}
                                                 </div>
                                             {% else %}
@@ -147,9 +162,21 @@
                                     </td>
                                 {% endfor %}
                                 
-                                <!-- Total hours and overtime columns - formato decimal con un decimal -->
-                                <td class="text-center bg-primary">{{ employee.total_work_hours|round(1) }}</td>
-                                <td class="text-center bg-info">{{ employee.total_overtime_hours|round(1) }}</td>
+                                <!-- Total hours and overtime columns - remove .0 if it's a whole number -->
+                                <td class="text-center bg-primary">
+                                    {% if employee.total_work_hours == employee.total_work_hours|int %}
+                                        {{ employee.total_work_hours|int }}
+                                    {% else %}
+                                        {{ employee.total_work_hours|round(1) }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-center bg-info">
+                                    {% if employee.total_overtime_hours == employee.total_overtime_hours|int %}
+                                        {{ employee.total_overtime_hours|int }}
+                                    {% else %}
+                                        {{ employee.total_overtime_hours|round(1) }}
+                                    {% endif %}
+                                </td>
                             </tr>
                         {% endfor %}
                     {% endfor %}
@@ -204,21 +231,14 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/timesheet.js') }}"></script>
 <script>
+    // Pass month configuration data from server to client
+    window.monthDatesConfig = {{ month_dates|tojson|safe }};
+    
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize timesheet filter form
-        const form = document.getElementById('timesheet-filter-form');
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const year = document.getElementById('year-select').value;
-            const month = document.getElementById('month-select').value;
-            const department = document.getElementById('department-select').value;
-            
-            let url = `{{ url_for('timesheet') }}?year=${year}&month=${month}`;
-            if (department) {
-                url += `&department=${department}`;
-            }
-            
-            window.location.href = url;
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl)
         });
         
         // Export to PDF button

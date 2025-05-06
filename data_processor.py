@@ -120,35 +120,53 @@ def get_previous_month_days(year, month, num_days=5):
     # Reverse so they're in chronological order
     return previous_days[::-1]
 
-def generate_timesheet(year, month, department_id=None):
+def generate_timesheet(year, month, department_id=None, custom_start_date=None, custom_end_date=None, housing_id=None):
     """
-    Generate timesheet data for the specified month and department
+    Generate timesheet data for the specified month and department/housing
     
     Args:
         year: Year for the timesheet (string or int)
         month: Month for the timesheet (string or int)
         department_id: Optional department ID to filter by
+        custom_start_date: Optional custom start date (string in 'YYYY-MM-DD' format)
+        custom_end_date: Optional custom end date (string in 'YYYY-MM-DD' format)
+        housing_id: Optional housing ID to filter by
         
     Returns:
         Dictionary with timesheet data
     """
     # Import here to avoid circular imports
-    from models import Department, Employee, AttendanceRecord
+    from models import Department, Employee, AttendanceRecord, Housing, BiometricTerminal
     from flask import session
+    import datetime
     
     try:
         year = int(year)
         month = int(month)
         
-        # Get month boundaries
-        start_date, end_date = get_month_start_end_dates(year, month)
+        # Use custom dates if provided
+        if custom_start_date and custom_end_date:
+            try:
+                # Parse custom dates
+                start_date = datetime.datetime.strptime(custom_start_date, "%Y-%m-%d").date()
+                end_date = datetime.datetime.strptime(custom_end_date, "%Y-%m-%d").date()
+                logger.info(f"Using custom date range: {start_date} to {end_date}")
+            except ValueError as e:
+                logger.error(f"Error parsing custom dates: {str(e)}")
+                # Fall back to default month dates
+                start_date, end_date = get_month_start_end_dates(year, month)
+        else:
+            # Get standard month boundaries
+            start_date, end_date = get_month_start_end_dates(year, month)
         
         # Get a few days from previous month for display at start of timesheet
-        prev_month_days = get_previous_month_days(year, month, 5)
-        
-        # Adjust start date to include previous month days
-        if prev_month_days:
-            start_date = prev_month_days[0]
+        # (Only if we're not using custom dates)
+        if not custom_start_date:
+            prev_month_days = get_previous_month_days(year, month, 5)
+            
+            # Adjust start date to include previous month days
+            if prev_month_days:
+                start_date = prev_month_days[0]
         
         # Build the list of dates for the timesheet
         dates = []
@@ -162,6 +180,10 @@ def generate_timesheet(year, month, department_id=None):
         
         if department_id:
             query = query.filter(Employee.department_id == int(department_id))
+            
+        # Apply Housing filter if provided
+        if housing_id:
+            query = query.filter(Employee.housing_id == int(housing_id))
         
         employees = query.all()
         
@@ -187,6 +209,12 @@ def generate_timesheet(year, month, department_id=None):
             
         logger.info(f"Using weekend days: {weekend_days}")
         
+        # فهرس لأجهزة البصمة وربطها بالسكن
+        terminal_to_housing = {}
+        terminals = BiometricTerminal.query.all()
+        for terminal in terminals:
+            terminal_to_housing[terminal.terminal_alias] = terminal.housing_id
+            
         # Build employee rows for the timesheet
         employee_rows = []
         
@@ -224,10 +252,18 @@ def generate_timesheet(year, month, department_id=None):
                 dept = Department.query.get(employee.department_id)
                 if dept:
                     dept_name = dept.name
+                    
+            # Get housing name
+            housing_name = ''
+            if employee.housing_id:
+                housing = Housing.query.get(employee.housing_id)
+                if housing:
+                    housing_name = housing.name
             
             # جمع معلومات عن أجهزة البصمة المستخدمة
             devices = set()
             terminal_alias_in = None
+            employee_housing_id = employee.housing_id  # معرف السكن من جدول الموظفين
             
             # حساب إجمالي ساعات العمل والساعات الإضافية
             total_work_hours = 0
@@ -239,6 +275,10 @@ def generate_timesheet(year, month, department_id=None):
                     # جمع معلومات أجهزة البصمة
                     if record.terminal_alias_in:
                         devices.add(record.terminal_alias_in)
+                        # إذا كان الموظف ليس لديه سكن محدد، حاول تحديد السكن من جهاز البصمة
+                        if not employee_housing_id and record.terminal_alias_in in terminal_to_housing:
+                            employee_housing_id = terminal_to_housing[record.terminal_alias_in]
+                            
                     if record.terminal_alias_out:
                         devices.add(record.terminal_alias_out)
                     
@@ -250,6 +290,12 @@ def generate_timesheet(year, month, department_id=None):
             if devices:
                 terminal_alias_in = sorted(devices)[0]  # استخدام أول جهاز بالترتيب الأبجدي
             
+            # إذا لم يكن للموظف سكن محدد، لكن هناك جهاز بصمة مرتبط بسكن، احفظ هذا السكن
+            if not housing_name and employee_housing_id:
+                housing = Housing.query.get(employee_housing_id)
+                if housing:
+                    housing_name = housing.name
+            
             employee_rows.append({
                 'id': employee.id,
                 'emp_code': employee.emp_code,
@@ -257,15 +303,17 @@ def generate_timesheet(year, month, department_id=None):
                 'name_ar': employee.name_ar,
                 'profession': employee.profession,
                 'department': dept_name,
+                'housing': housing_name,  # اسم السكن
+                'housing_id': employee_housing_id,  # معرف السكن
                 'attendance': attendance_data,
-                'terminal_alias_in': terminal_alias_in,  # إضافة معلومات جهاز البصمة الأساسي
+                'terminal_alias_in': terminal_alias_in,  # جهاز البصمة الأساسي
                 'devices': list(devices),  # قائمة بجميع أجهزة البصمة المستخدمة
                 'total_work_hours': total_work_hours,  # إجمالي ساعات العمل
                 'total_overtime_hours': total_overtime_hours  # إجمالي الساعات الإضافية
             })
         
-        # ترتيب الموظفين حسب جهاز البصمة
-        employee_rows.sort(key=lambda x: (x.get('terminal_alias_in') or 'Unknown'))
+        # ترتيب الموظفين حسب السكن ثم حسب جهاز البصمة
+        employee_rows.sort(key=lambda x: (x.get('housing') or 'Unknown', x.get('terminal_alias_in') or 'Unknown'))
         
         # Get month period data if available
         from models import MonthPeriod
@@ -279,14 +327,38 @@ def generate_timesheet(year, month, department_id=None):
             working_days = month_period.days_in_month
             working_hours = month_period.hours_in_month
             
+        # تنظيم الموظفين حسب السكن
+        housing_groups = {}
+        ungrouped_employees = []
+        
+        for employee in employee_rows:
+            housing_name = employee.get('housing')
+            if housing_name:
+                if housing_name not in housing_groups:
+                    housing_groups[housing_name] = []
+                housing_groups[housing_name].append(employee)
+            else:
+                ungrouped_employees.append(employee)
+                
+        # بناء قائمة الموظفين النهائية المرتبة حسب السكن
+        grouped_employees = []
+        
+        # أولاً إضافة الموظفين المجمعين حسب السكن
+        for housing_name in sorted(housing_groups.keys()):
+            grouped_employees.extend(housing_groups[housing_name])
+            
+        # ثم إضافة الموظفين الذين ليس لديهم سكن
+        grouped_employees.extend(ungrouped_employees)
+            
         # Build and return timesheet data
         timesheet_data = {
             'year': year,
             'month': month,
             'month_name': get_month_name(month),
             'dates': dates,
-            'employees': employee_rows,
+            'employees': grouped_employees,  # استخدام القائمة المجمعة حسب السكن
             'total_employees': len(employee_rows),
+            'housing_groups': housing_groups,  # تضمين معلومات التجميع حسب السكن
             'start_date': start_date,
             'end_date': end_date,
             'working_days': working_days,
@@ -368,4 +440,62 @@ def get_department_stats():
     
     except Exception as e:
         logger.error(f"Error getting department stats: {str(e)}")
+        return []
+
+def get_housing_stats():
+    """Get statistics by housing for dashboard"""
+    # Import here to avoid circular imports
+    from models import Housing, Employee, AttendanceRecord
+    
+    try:
+        stats = []
+        housings = Housing.query.all()
+        
+        for housing in housings:
+            # Count employees in housing
+            employee_count = Employee.query.filter_by(housing_id=housing.id, active=True).count()
+            
+            # Get recent attendance stats (last 7 days)
+            today = date.today()
+            week_ago = today - timedelta(days=7)
+            
+            employees_in_housing = Employee.query.filter_by(housing_id=housing.id, active=True).all()
+            emp_ids = [e.id for e in employees_in_housing]
+            
+            # Count attendance statuses
+            present_count = AttendanceRecord.query.filter(
+                AttendanceRecord.employee_id.in_(emp_ids),
+                AttendanceRecord.date >= week_ago,
+                AttendanceRecord.date <= today,
+                AttendanceRecord.attendance_status == 'P'
+            ).count()
+            
+            absent_count = AttendanceRecord.query.filter(
+                AttendanceRecord.employee_id.in_(emp_ids),
+                AttendanceRecord.date >= week_ago,
+                AttendanceRecord.date <= today,
+                AttendanceRecord.attendance_status == 'A'
+            ).count()
+            
+            vacation_count = AttendanceRecord.query.filter(
+                AttendanceRecord.employee_id.in_(emp_ids),
+                AttendanceRecord.date >= week_ago,
+                AttendanceRecord.date <= today,
+                AttendanceRecord.attendance_status == 'V'
+            ).count()
+            
+            stats.append({
+                'id': housing.id,
+                'name': housing.name,
+                'location': housing.location,
+                'employee_count': employee_count,
+                'present_count': present_count,
+                'absent_count': absent_count,
+                'vacation_count': vacation_count
+            })
+            
+        return stats
+    
+    except Exception as e:
+        logger.error(f"Error getting housing stats: {str(e)}")
         return []

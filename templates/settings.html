@@ -50,17 +50,23 @@
                         <label class="form-label">{{ t('date_range') }}</label>
                         <div class="row">
                             <div class="col-md-6">
-                                <div class="form-floating mb-2">
-                                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ sync_settings.start_date }}" dir="{{ get_dir() }}">
-                                    <label for="start_date">{{ t('start_date') }}</label>
+                                <!-- Removed form-floating and simplified structure -->
+                                <div class="mb-2">
+                                    <label for="start_date" class="form-label">{{ t('start_date') }}</label>
+                                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ sync_settings.start_date }}">
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="form-floating mb-2">
-                                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ sync_settings.end_date }}" dir="{{ get_dir() }}">
-                                    <label for="end_date">{{ t('end_date') }}</label>
+                                <!-- Removed form-floating and simplified structure -->
+                                <div class="mb-2">
+                                    <label for="end_date" class="form-label">{{ t('end_date') }}</label>
+                                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ sync_settings.end_date }}">
                                 </div>
                             </div>
+                        </div>
+                        <!-- Added an alert box to highlight importance of date selection -->
+                        <div class="alert alert-info mt-2 mb-0">
+                            <i class="fas fa-info-circle me-1"></i> {{ t('select_dates_for_sync') or 'Select both dates to control the sync date range' }}
                         </div>
                     </div>
                     
@@ -86,6 +92,11 @@
                     <div class="mb-3">
                         <label class="form-label">{{ t('sync_status') }}</label>
                         <div id="sync-status-container">
+                            {% if mock_mode_enabled %}
+                            <div class="alert alert-warning mb-2">
+                                <i class="fas fa-robot me-2"></i> <strong>Mock Mode Enabled</strong> - Using simulated data since BioTime API servers are unavailable
+                            </div>
+                            {% endif %}
                             <div class="d-flex align-items-center">
                                 {% if last_sync and last_sync.status == 'success' %}
                                     <span class="badge bg-success me-2"><i class="fas fa-check"></i></span>
@@ -156,7 +167,8 @@
                         <button type="submit" class="btn btn-primary flex-fill">
                             <i class="fas fa-save"></i> {{ t('save_settings') }}
                         </button>
-                        <button type="submit" class="btn btn-success flex-fill" formaction="{{ url_for('trigger_sync') }}">
+                        <!-- Changed from <a> to <button> to prevent navigation -->
+                        <button type="button" class="btn btn-success flex-fill" id="sync-now-btn">
                             <i class="fas fa-sync-alt"></i> {{ t('sync_now') }}
                         </button>
                         <a href="{{ url_for('sync_results') }}" class="btn btn-info flex-fill">
@@ -278,6 +290,187 @@
                 </form>
             </div>
         </div>
+
+        <div class="card bg-dark mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Month Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="month-config-form">
+                    <div class="mb-3">
+                        <p class="mb-1">Configure start and end dates for each month in the timesheet:</p>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i> These dates will be used as a reference for selecting months in the timesheet.
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Month</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for i in range(1, 13) %}
+                                    <tr>
+                                        <td>{{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}</td>
+                                        <td>
+                                            <input type="date" class="form-control" id="month_{{ i }}_start" name="month_{{ i }}_start" 
+                                                value="{{ month_dates[i].start if month_dates and i in month_dates else '' }}">
+                                        </td>
+                                        <td>
+                                            <input type="date" class="form-control" id="month_{{ i }}_end" name="month_{{ i }}_end"
+                                                value="{{ month_dates[i].end if month_dates and i in month_dates else '' }}">
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="button" class="btn btn-primary" id="save-month-config">
+                            <i class="fas fa-save"></i> Save Month Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Housing and Biometric Terminals Management Section -->
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">إدارة السكن وأجهزة البصمة</h5>
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addHousingModal">
+                    <i class="fas fa-plus"></i> إضافة سكن جديد
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> يمكنك ربط أجهزة البصمة بالسكن من هنا، وسيتم تجميع بيانات الحضور (التايم شيت) حسب السكن وليس حسب كل جهاز بصمة.
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover" id="housing-table">
+                        <thead>
+                            <tr>
+                                <th>السكن</th>
+                                <th>الموقع</th>
+                                <th>عدد أجهزة البصمة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if housings %}
+                                {% for housing in housings %}
+                                    <tr>
+                                        <td>{{ housing.name }}</td>
+                                        <td>{{ housing.location }}</td>
+                                        <td>{{ housing.terminals|length }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" class="btn btn-info btn-sm view-terminals-btn" 
+                                                    data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}">
+                                                    <i class="fas fa-eye"></i> أجهزة البصمة
+                                                </button>
+                                                <button type="button" class="btn btn-primary btn-sm edit-housing-btn" 
+                                                    data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}" 
+                                                    data-housing-location="{{ housing.location }}" data-housing-description="{{ housing.description }}">
+                                                    <i class="fas fa-edit"></i> تعديل
+                                                </button>
+                                                <button type="button" class="btn btn-danger btn-sm delete-housing-btn" 
+                                                    data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}">
+                                                    <i class="fas fa-trash"></i> حذف
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">لا يوجد أي سكن مضاف</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">أجهزة البصمة</h5>
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addTerminalModal">
+                    <i class="fas fa-plus"></i> إضافة جهاز بصمة
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> قم بربط أجهزة البصمة بالسكن المناسب ليتم تجميع بيانات الحضور حسب السكن.
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover" id="terminals-table">
+                        <thead>
+                            <tr>
+                                <th>اسم الجهاز</th>
+                                <th>معرف الجهاز</th>
+                                <th>الموقع</th>
+                                <th>السكن المرتبط</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if terminals %}
+                                {% for terminal in terminals %}
+                                    <tr>
+                                        <td>{{ terminal.terminal_alias }}</td>
+                                        <td>{{ terminal.device_id }}</td>
+                                        <td>{{ terminal.location }}</td>
+                                        <td>
+                                            {% if terminal.housing %}
+                                                {{ terminal.housing.name }}
+                                            {% else %}
+                                                <span class="text-warning">غير مرتبط</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" class="btn btn-primary btn-sm edit-terminal-btn"
+                                                    data-terminal-id="{{ terminal.id }}" data-terminal-alias="{{ terminal.terminal_alias }}"
+                                                    data-device-id="{{ terminal.device_id }}" data-location="{{ terminal.location }}"
+                                                    data-housing-id="{{ terminal.housing_id if terminal.housing_id else '' }}">
+                                                    <i class="fas fa-edit"></i> تعديل
+                                                </button>
+                                                <button type="button" class="btn btn-danger btn-sm delete-terminal-btn"
+                                                    data-terminal-id="{{ terminal.id }}" data-terminal-alias="{{ terminal.terminal_alias }}">
+                                                    <i class="fas fa-trash"></i> حذف
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">لا يوجد أي أجهزة بصمة مضافة</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -344,6 +537,194 @@
     </div>
 </div>
 
+<!-- Add Housing Modal -->
+<div class="modal fade" id="addHousingModal" tabindex="-1" aria-labelledby="addHousingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <form id="add-housing-form" action="{{ url_for('add_housing') }}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addHousingModalLabel">إضافة سكن جديد</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="housing_name" class="form-label">اسم السكن</label>
+                        <input type="text" class="form-control" id="housing_name" name="housing_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="housing_location" class="form-label">الموقع</label>
+                        <input type="text" class="form-control" id="housing_location" name="housing_location">
+                    </div>
+                    <div class="mb-3">
+                        <label for="housing_description" class="form-label">الوصف</label>
+                        <textarea class="form-control" id="housing_description" name="housing_description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Housing Modal -->
+<div class="modal fade" id="editHousingModal" tabindex="-1" aria-labelledby="editHousingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <form id="edit-housing-form" action="{{ url_for('edit_housing') }}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editHousingModalLabel">تعديل السكن</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit_housing_id" name="housing_id">
+                    <div class="mb-3">
+                        <label for="edit_housing_name" class="form-label">اسم السكن</label>
+                        <input type="text" class="form-control" id="edit_housing_name" name="housing_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_housing_location" class="form-label">الموقع</label>
+                        <input type="text" class="form-control" id="edit_housing_location" name="housing_location">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_housing_description" class="form-label">الوصف</label>
+                        <textarea class="form-control" id="edit_housing_description" name="housing_description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Terminal Modal -->
+<div class="modal fade" id="addTerminalModal" tabindex="-1" aria-labelledby="addTerminalModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <form id="add-terminal-form" action="{{ url_for('add_terminal') }}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addTerminalModalLabel">إضافة جهاز بصمة جديد</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="terminal_alias" class="form-label">اسم الجهاز</label>
+                        <input type="text" class="form-control" id="terminal_alias" name="terminal_alias" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="device_id" class="form-label">معرف الجهاز</label>
+                        <input type="text" class="form-control" id="device_id" name="device_id" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="terminal_location" class="form-label">الموقع</label>
+                        <input type="text" class="form-control" id="terminal_location" name="terminal_location">
+                    </div>
+                    <div class="mb-3">
+                        <label for="housing_id" class="form-label">السكن المرتبط</label>
+                        <select class="form-select" id="housing_id" name="housing_id">
+                            <option value="">-- اختر السكن --</option>
+                            {% if housings %}
+                                {% for housing in housings %}
+                                    <option value="{{ housing.id }}">{{ housing.name }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Terminal Modal -->
+<div class="modal fade" id="editTerminalModal" tabindex="-1" aria-labelledby="editTerminalModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <form id="edit-terminal-form" action="{{ url_for('edit_terminal') }}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editTerminalModalLabel">تعديل جهاز البصمة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit_terminal_id" name="terminal_id">
+                    <div class="mb-3">
+                        <label for="edit_terminal_alias" class="form-label">اسم الجهاز</label>
+                        <input type="text" class="form-control" id="edit_terminal_alias" name="terminal_alias" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_device_id" class="form-label">معرف الجهاز</label>
+                        <input type="text" class="form-control" id="edit_device_id" name="device_id" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_terminal_location" class="form-label">الموقع</label>
+                        <input type="text" class="form-control" id="edit_terminal_location" name="terminal_location">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_housing_id" class="form-label">السكن المرتبط</label>
+                        <select class="form-select" id="edit_housing_id" name="housing_id">
+                            <option value="">-- اختر السكن --</option>
+                            {% if housings %}
+                                {% for housing in housings %}
+                                    <option value="{{ housing.id }}">{{ housing.name }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Terminals Modal -->
+<div class="modal fade" id="viewTerminalsModal" tabindex="-1" aria-labelledby="viewTerminalsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewTerminalsModalLabel">أجهزة البصمة في <span id="housing-name-title"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover" id="housing-terminals-table">
+                        <thead>
+                            <tr>
+                                <th>اسم الجهاز</th>
+                                <th>معرف الجهاز</th>
+                                <th>الموقع</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="housing-terminals-body">
+                            <!-- Will be filled dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-terminals-message" class="text-center d-none">
+                    <p>لا يوجد أجهزة بصمة مرتبطة بهذا السكن</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary" id="add-terminal-to-housing-btn">إضافة جهاز بصمة</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Error Modal -->
 <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -371,15 +752,52 @@
         tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
-        
-        // Sync Now button handling - تعديل طريقة معالجة زر المزامنة
-        const syncNowBtn = document.querySelector('button[formaction="{{ url_for("trigger_sync") }}"]');
+
+        // Set up sync button functionality
+        const syncNowBtn = document.getElementById('sync-now-btn');
         if (syncNowBtn) {
             syncNowBtn.addEventListener('click', function(e) {
-                // عدم منع السلوك الافتراضي للنموذج - لنرى النتيجة أولاً
-                // e.preventDefault();
+                e.preventDefault(); // Prevent the default link behavior
                 
-                // Show sync steps
+                console.log('Sync now button clicked');
+                
+                // Get the start and end dates from the form
+                let startDate = document.getElementById('start_date').value;
+                let endDate = document.getElementById('end_date').value;
+                
+                // If both dates are provided, use them directly
+                if (startDate && endDate) {
+                    console.log(`Using user-specified date range: ${startDate} to ${endDate}`);
+                } 
+                // If one or both dates are missing, show a confirmation
+                else {
+                    if (!confirm('لم يتم تحديد نطاق تاريخ كامل للمزامنة. هل تريد استخدام التاريخ الحالي وقبله بشهر؟')) {
+                        return false; // User canceled
+                    }
+                    
+                    // Set today and one month ago as default dates
+                    let today = new Date();
+                    let oneMonthAgo = new Date();
+                    oneMonthAgo.setMonth(today.getMonth() - 1);
+                    
+                    // Format dates as YYYY-MM-DD
+                    let todayFormatted = today.toISOString().split('T')[0];
+                    let oneMonthAgoFormatted = oneMonthAgo.toISOString().split('T')[0];
+                    
+                    if (!endDate) {
+                        document.getElementById('end_date').value = todayFormatted;
+                        endDate = todayFormatted;
+                    }
+                    
+                    if (!startDate) {
+                        document.getElementById('start_date').value = oneMonthAgoFormatted;
+                        startDate = oneMonthAgoFormatted;
+                    }
+                    
+                    console.log(`Auto-set date range: ${startDate} to ${endDate}`);
+                }
+                
+                // Show sync steps visual feedback
                 const syncStepsEl = document.getElementById('sync-steps');
                 if (syncStepsEl) {
                     syncStepsEl.classList.remove('d-none');
@@ -394,291 +812,181 @@
                 setStepStatus('process', 'waiting');
                 setStepStatus('save', 'waiting');
                 setStepStatus('complete', 'waiting');
+                
+                // Create URL with date parameters
+                let syncUrl = new URL("{{ url_for('trigger_sync', _external=True) }}");
+                syncUrl.searchParams.append('start_date', startDate);
+                syncUrl.searchParams.append('end_date', endDate);
+                
+                // Make the actual fetch call to trigger the sync
+                fetch(syncUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    
+                    // Start checking the sync status periodically
+                    simulateSyncProgress();
+                    
+                    // Start checking for completion
+                    setTimeout(checkSyncResult, 5000);
+                    
+                    return response.text(); 
+                }).then(data => {
+                    console.log('Sync triggered successfully');
+                    
+                    // Force the form to remain visible with aggressive style overrides
+                    try {
+                        // Target the form element directly
+                        const settingsForm = document.querySelector('form[action="{{ url_for("save_settings") }}"]');
+                        
+                        // Apply aggressive style overrides to ensure form visibility
+                        if (settingsForm) {
+                            // Apply direct inline styles with !important to override any other styles
+                            settingsForm.setAttribute('style', 
+                                'display: block !important; ' +
+                                'visibility: visible !important; ' +
+                                'opacity: 1 !important; ' +
+                                'pointer-events: auto !important; ' +
+                                'transition: none !important; ' + 
+                                'animation: none !important; ' +
+                                'height: auto !important; ' +
+                                'overflow: visible !important;'
+                            );
+                            
+                            // Make sure all children are also visible and enabled
+                            const formElements = settingsForm.querySelectorAll('.mb-3, .row.mb-3');
+                            formElements.forEach(el => {
+                                el.setAttribute('style', 
+                                    'display: block !important; ' +
+                                    'visibility: visible !important; ' +
+                                    'opacity: 1 !important; ' +
+                                    'pointer-events: auto !important; ' +
+                                    'transition: none !important; ' + 
+                                    'animation: none !important; ' +
+                                    'height: auto !important;'
+                                );
+                            });
+                            
+                            // Enable all form controls
+                            const formControls = settingsForm.querySelectorAll('input, select, textarea, button');
+                            formControls.forEach(control => {
+                                control.disabled = false;
+                                control.setAttribute('style', 
+                                    'pointer-events: auto !important; ' +
+                                    'opacity: 1 !important;'
+                                );
+                            });
+                            
+                            console.log('Applied aggressive style overrides to ensure form stays visible');
+                        } else {
+                            console.error('Could not find the settings form element');
+                        }
+                    } catch (err) {
+                        console.error('Error ensuring form visibility:', err);
+                    }
+
+                }).catch(error => {
+                    console.error('Error triggering sync:', error);
+                    failSyncAnimation('Error triggering sync: ' + error.message);
+                });
+                
+                return false; // Prevent default action
             });
+        }
+        
+        // Save month configuration button
+        document.getElementById('save-month-config').addEventListener('click', function() {
+            // ...existing code...
+        });
+        
+        // Load saved month configuration
+        const savedMonthDates = localStorage.getItem('month_dates_config');
+        if (savedMonthDates) {
+            // ...existing code...
         }
         
         // File upload form handling
         const uploadForm = document.querySelector('form[action="{{ url_for("upload_sync") }}"]');
         if (uploadForm) {
-            uploadForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                // Show sync steps for upload
-                const syncStepsEl = document.getElementById('sync-steps');
-                syncStepsEl.classList.remove('d-none');
-                
-                // Update status display
-                updateSyncStatus('in_progress', 'Processing uploaded file...');
-                
-                // Set steps status for upload
-                setStepStatus('connect', 'success');
-                setStepStatus('download', 'success');
-                setStepStatus('process', 'active');
-                setStepStatus('save', 'waiting');
-                setStepStatus('complete', 'waiting');
-                updateProgressBar(50, 'Processing uploaded file...');
-                
-                // Submit the form
-                const formData = new FormData(this);
-                
-                fetch("{{ url_for('upload_sync') }}", {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                }).then(response => {
-                    return response.json();
-                }).then(data => {
-                    console.log('Upload response:', data);
-                    
-                    // Handle completed upload
-                    if (data.status === 'success') {
-                        setStepStatus('process', 'success');
-                        setStepStatus('save', 'active');
-                        updateProgressBar(75, 'Saving to database...');
-                        
-                        setTimeout(() => {
-                            setStepStatus('save', 'success');
-                            setStepStatus('complete', 'success');
-                            updateProgressBar(100, 'Complete');
-                            updateSyncStatus('success', `Processed ${data.records} records successfully`);
-                            
-                            // Reload the page after 2 seconds
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 2000);
-                        }, 1000);
-                    } else {
-                        failSyncAnimation(data.error || 'Failed to process file');
-                    }
-                }).catch(error => {
-                    console.error('Upload error:', error);
-                    failSyncAnimation('Connection error');
-                });
-            });
+            // ...existing code...
         }
         
         // Save appearance settings button
         document.getElementById('save-appearance-settings').addEventListener('click', function() {
-            const form = document.getElementById('appearance-settings-form');
-            const formData = new FormData(form);
-            
-            // In a real implementation, this would send settings to the server
-            // For now, we'll just store in localStorage
-            const settings = {};
-            for (const [key, value] of formData.entries()) {
-                if (key.endsWith('[]')) {
-                    // Handle multi-select
-                    const simpleKey = key.replace('[]', '');
-                    if (!settings[simpleKey]) settings[simpleKey] = [];
-                    settings[simpleKey].push(value);
-                } else {
-                    settings[key] = value;
-                }
-            }
-            
-            localStorage.setItem('appearance_settings', JSON.stringify(settings));
-            alert('Appearance settings saved successfully!');
-            
-            // Apply color changes
-            applyColorSettings(settings);
+            // ...existing code...
         });
         
         // Load saved appearance settings
         const savedSettings = localStorage.getItem('appearance_settings');
         if (savedSettings) {
-            const settings = JSON.parse(savedSettings);
-            
-            // Populate form fields
-            for (const key in settings) {
-                const elements = document.getElementsByName(key + '[]');
-                if (elements.length > 0) {
-                    // Handle multi-select
-                    for (const element of elements) {
-                        element.selected = settings[key].includes(element.value);
-                    }
-                } else {
-                    const element = document.getElementById(key);
-                    if (element) {
-                        if (element.type === 'checkbox') {
-                            element.checked = settings[key] === 'on' || settings[key] === true;
-                        } else {
-                            element.value = settings[key];
-                        }
-                    }
-                }
-            }
-            
-            // Apply color settings
-            applyColorSettings(settings);
+            // ...existing code...
         }
         
         // Error modal handling
         document.querySelectorAll('.error-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const errorText = this.getAttribute('data-error');
-                document.getElementById('errorDetails').textContent = errorText || 'No error details available';
-            });
+            // ...existing code...
         });
         
         // File upload validation
         document.getElementById('sync_file').addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                if (!file.name.endsWith('.txt')) {
-                    alert('Please select a .txt file only');
-                    this.value = '';
-                } else if (file.size > 10 * 1024 * 1024) { // 10MB limit
-                    alert('File size exceeds 10MB limit');
-                    this.value = '';
-                }
-            }
+            // ...existing code...
         });
         
         // Check for ongoing sync on page load
         checkSyncStatus();
+
+        // Housing management
+        document.querySelectorAll('.edit-housing-btn').forEach(btn => {
+            // ...existing code...
+        });
+        
+        document.querySelectorAll('.delete-housing-btn').forEach(btn => {
+            // ...existing code...
+        });
+        
+        // Terminal management
+        document.querySelectorAll('.edit-terminal-btn').forEach(btn => {
+            // ...existing code...
+        });
+        
+        document.querySelectorAll('.delete-terminal-btn').forEach(btn => {
+            // ...existing code...
+        });
+        
+        // View terminals for a specific housing
+        document.querySelectorAll('.view-terminals-btn').forEach(btn => {
+            // ...existing code...
+        });
     });
     
     // Helper functions for sync status
     function updateSyncStatus(status, message) {
-        const container = document.getElementById('sync-status-container');
-        if (!container) return;
-        
-        const statusHTML = `
-            <div class="d-flex align-items-center">
-                ${getStatusBadgeHTML(status)}
-                <span>${message || getStatusMessage(status)}</span>
-            </div>
-        `;
-        
-        // Update only the status part
-        const firstChild = container.querySelector('.d-flex.align-items-center');
-        if (firstChild) {
-            firstChild.outerHTML = statusHTML;
-        } else {
-            container.insertAdjacentHTML('afterbegin', statusHTML);
-        }
-        
-        // Add progress bar if in progress
-        if (status === 'in_progress' && !document.getElementById('sync-progress-bar')) {
-            const progressHTML = `
-                <div class="progress mt-2" style="height: 25px;">
-                    <div id="sync-progress-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" 
-                        role="progressbar" style="width: 10%;" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">
-                        Starting synchronization...
-                    </div>
-                </div>
-            `;
-            firstChild.insertAdjacentHTML('afterend', progressHTML);
-        }
+        // ...existing code...
     }
     
     function getStatusBadgeHTML(status) {
-        switch(status) {
-            case 'success':
-                return '<span class="badge bg-success me-2"><i class="fas fa-check"></i></span>';
-            case 'error':
-                return '<span class="badge bg-danger me-2"><i class="fas fa-times"></i></span>';
-            case 'partial':
-                return '<span class="badge bg-warning me-2"><i class="fas fa-exclamation-triangle"></i></span>';
-            case 'in_progress':
-                return '<span class="badge bg-primary me-2"><i class="fas fa-sync-alt fa-spin"></i></span>';
-            default:
-                return '<span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>';
-        }
+        // ...existing code...
     }
     
     function getStatusMessage(status) {
-        switch(status) {
-            case 'success':
-                return 'Synchronization completed successfully';
-            case 'error':
-                return 'Synchronization failed';
-            case 'partial':
-                return 'Synchronization partially completed';
-            case 'in_progress':
-                return 'Synchronization in progress...';
-            default:
-                return 'No sync data available';
-        }
+        // ...existing code...
     }
     
     function updateProgressBar(percent, message) {
-        const progressBar = document.getElementById('sync-progress-bar');
-        if (!progressBar) return;
-        
-        progressBar.style.width = `${percent}%`;
-        progressBar.setAttribute('aria-valuenow', percent);
-        if (message) {
-            progressBar.textContent = message;
-        }
+        // ...existing code...
     }
     
     function setStepStatus(step, status) {
-        const stepEl = document.getElementById(`step-${step}`);
-        const iconEl = document.getElementById(`${step}-icon`);
-        if (!stepEl || !iconEl) return;
-        
-        // Remove existing status classes
-        iconEl.classList.remove('bg-secondary', 'bg-primary', 'bg-success', 'bg-warning', 'bg-danger');
-        
-        // Add new status class and icon
-        switch(status) {
-            case 'active':
-                iconEl.classList.add('bg-primary');
-                iconEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                break;
-            case 'success':
-                iconEl.classList.add('bg-success');
-                iconEl.innerHTML = '<i class="fas fa-check"></i>';
-                break;
-            case 'warning':
-                iconEl.classList.add('bg-warning');
-                iconEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
-                break;
-            case 'error':
-                iconEl.classList.add('bg-danger');
-                iconEl.innerHTML = '<i class="fas fa-times"></i>';
-                break;
-            case 'pending':
-                iconEl.classList.add('bg-primary');
-                iconEl.innerHTML = '<i class="fas fa-clock"></i>';
-                break;
-            case 'waiting':
-            default:
-                iconEl.classList.add('bg-secondary');
-                iconEl.innerHTML = '<i class="fas fa-circle"></i>';
-                break;
-        }
+        // ...existing code...
     }
     
     function simulateSyncProgress() {
-        // This function simulates the sync progress steps
-        // In a real implementation, this would be replaced by server-sent events
-        setTimeout(() => {
-            setStepStatus('connect', 'success');
-            setStepStatus('download', 'active');
-            updateProgressBar(40, 'Downloading attendance data...');
-            
-            setTimeout(() => {
-                setStepStatus('download', 'success');
-                setStepStatus('process', 'active');
-                updateProgressBar(60, 'Processing attendance data...');
-                
-                setTimeout(() => {
-                    setStepStatus('process', 'success');
-                    setStepStatus('save', 'active');
-                    updateProgressBar(80, 'Saving to database...');
-                    
-                    setTimeout(() => {
-                        // At this point, the server response should have come back
-                        // but we'll handle it here as a fallback
-                        checkSyncResult();
-                    }, 3000);
-                }, 3000);
-            }, 5000);
-        }, 3000);
+        // ...existing code...
     }
     
     function completeSyncAnimation(data) {
@@ -693,10 +1001,8 @@
         
         updateSyncStatus('success', message);
         
-        // Reload the page after 2 seconds to show updated stats
-        setTimeout(() => {
-            window.location.reload();
-        }, 2000);
+        // DO NOT reload the page automatically - let user see the results
+        console.log('Sync completed successfully');
     }
     
     function failSyncAnimation(errorMessage) {
@@ -705,9 +1011,11 @@
         updateProgressBar(100, 'Sync failed');
         updateSyncStatus('error', errorMessage || 'Synchronization failed');
         
-        // Add error message display
+        // Add error message display if not already present
         const container = document.getElementById('sync-status-container');
-        if (container && errorMessage) {
+        const existingAlert = container.querySelector('.alert.alert-danger');
+        
+        if (container && errorMessage && !existingAlert) {
             container.innerHTML += `
                 <div class="alert alert-danger mt-2">
                     <h6>Error Details:</h6>
@@ -715,104 +1023,21 @@
                 </div>
             `;
         }
+        
+        // Keep error message visible - don't refresh the page
+        console.log('Sync failed:', errorMessage);
     }
     
     function checkSyncStatus() {
-        // Check if there's an ongoing sync when the page loads
-        fetch("{{ url_for('check_sync_status') }}", {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
-            if (data.status === 'in_progress') {
-                // Show that sync is in progress
-                const syncStepsEl = document.getElementById('sync-steps');
-                syncStepsEl.classList.remove('d-none');
-                
-                updateSyncStatus('in_progress', data.message || 'Synchronization in progress...');
-                updateProgressBar(data.progress || 50, data.progress_message || 'Syncing data...');
-                
-                // Set step status
-                if (data.step) {
-                    const steps = ['connect', 'download', 'process', 'save', 'complete'];
-                    const currentStepIndex = steps.indexOf(data.step);
-                    
-                    for (let i = 0; i < steps.length; i++) {
-                        if (i < currentStepIndex) {
-                            setStepStatus(steps[i], 'success');
-                        } else if (i === currentStepIndex) {
-                            setStepStatus(steps[i], 'active');
-                        } else {
-                            setStepStatus(steps[i], 'waiting');
-                        }
-                    }
-                }
-                
-                // Poll for updates
-                setTimeout(checkSyncStatus, 2000);
-            }
-        }).catch(error => {
-            console.error('Error checking sync status:', error);
-        });
+        // ...existing code...
     }
     
     function checkSyncResult() {
-        fetch("{{ url_for('check_sync_status') }}", {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
-            if (data.status === 'success') {
-                completeSyncAnimation(data);
-            } else if (data.status === 'error') {
-                failSyncAnimation(data.error);
-            } else if (data.status === 'in_progress') {
-                // Still in progress, check again later
-                setTimeout(checkSyncResult, 2000);
-            }
-        }).catch(error => {
-            console.error('Error checking sync result:', error);
-            failSyncAnimation('Error checking sync status');
-        });
+        // ...existing code...
     }
     
     function applyColorSettings(settings) {
-        // In a real implementation, this would update CSS variables or styles
-        console.log('Applying color settings:', settings);
-        
-        // Create or update <style> element with new color variables
-        let styleEl = document.getElementById('dynamic-colors');
-        if (!styleEl) {
-            styleEl = document.createElement('style');
-            styleEl.id = 'dynamic-colors';
-            document.head.appendChild(styleEl);
-        }
-        
-        const css = `
-            :root {
-                --attendance-present-color: ${settings.present_color || '#28a745'};
-                --attendance-absent-color: ${settings.absent_color || '#dc3545'};
-                --attendance-vacation-color: ${settings.vacation_color || '#28a745'};
-                --attendance-transfer-color: ${settings.transfer_color || '#0d6efd'};
-                --attendance-sick-color: ${settings.sick_color || '#ffc107'};
-                --attendance-eid-color: ${settings.eid_color || '#0dcaf0'};
-            }
-            
-            .status-P { background-color: var(--attendance-present-color) !important; }
-            .status-A { background-color: var(--attendance-absent-color) !important; }
-            .status-V { background-color: var(--attendance-vacation-color) !important; }
-            .status-T { background-color: var(--attendance-transfer-color) !important; }
-            .status-S { background-color: var(--attendance-sick-color) !important; }
-            .status-E { background-color: var(--attendance-eid-color) !important; }
-        `;
-        
-        styleEl.innerHTML = css;
+        // ...existing code...
     }
 </script>
 {% endblock %}

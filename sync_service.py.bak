@@ -1,0 +1,418 @@
+import os
+import logging
+import requests
+import pandas as pd
+from datetime import datetime, timedelta
+from flask import current_app
+from sqlalchemy.exc import SQLAlchemyError
+import threading
+import time
+import traceback
+import random
+import csv
+
+# إعداد التسجيل
+logger = logging.getLogger(__name__)
+
+# إعداد واجهة BioTime API
+PRIMARY_API_URL = "http://172.16.16.13:8585/att/api/transactionReport/export/"
+BACKUP_API_URL = "http://213.210.196.115:8585/att/api/transactionReport/export/" 
+BIOTIME_API_BASE_URL = PRIMARY_API_URL  # Default to primary URL
+BIOTIME_USERNAME = os.environ.get("BIOTIME_USERNAME", "raghad")
+BIOTIME_PASSWORD = os.environ.get("BIOTIME_PASSWORD", "A1111111")
+DEPARTMENTS = [10]  # تحديث رقم القسم ليطابق الرابط الجديد
+
+# Enable mock mode for development/testing when BioTime servers are unavailable
+MOCK_MODE_ENABLED = os.environ.get("MOCK_MODE", "false").lower() == "true"
+
+# إعدادات نطاق التاريخ للمزامنة
+SYNC_START_DATE = os.environ.get("SYNC_START_DATE", "")
+SYNC_END_DATE = os.environ.get("SYNC_END_DATE", "")
+
+# Connection timeout settings
+CONNECT_TIMEOUT = 30  # Timeout for establishing connection
+READ_TIMEOUT = 180    # Timeout for reading response
+
+# متغير عالمي للتحكم في حالة المزامنة - لن نستخدم المتغير من app.py بعد الآن
+CANCEL_SYNC = False
+SYNC_THREAD = None
+SYNC_PROGRESS = {"status": "none", "step": "", "progress": 0, "message": "", "records": 0, "error": ""}
+
+def update_sync_status(step, progress, message=None, error=None, records=0, status=None):
+    """تحديث حالة المزامنة العالمية"""
+    global SYNC_PROGRESS
+    
+    # Update provided fields only
+    if step is not None:
+        SYNC_PROGRESS["step"] = step
+    
+    if progress is not None:
+        SYNC_PROGRESS["progress"] = progress
+    
+    if message is not None:
+        SYNC_PROGRESS["message"] = message
+    
+    if error is not None:
+        SYNC_PROGRESS["error"] = error
+    
+    if records is not None:
+        SYNC_PROGRESS["records"] = records
+    
+    if status is not None:
+        SYNC_PROGRESS["status"] = status
+    
+    logger.debug(f"تحديث حالة المزامنة: {step}, {progress}%, {message}, حالة: {status}")
+
+def check_cancellation(sync_log=None, db=None):
+    """التحقق من طلب إلغاء المزامنة"""
+    global CANCEL_SYNC
+    
+    if CANCEL_SYNC:
+        logger.info("تم إلغاء المزامنة بناء على طلب المستخدم")
+        update_sync_status("cancel", 0, "تم إلغاء المزامنة بناء على طلب المستخدم", status="cancelled")
+        
+        # Update sync_log if provided
+        if sync_log and db:
+            try:
+                # Add your logic here
+                pass
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                # Add your logic here
+                pass
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                pass  # Add your logic here
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                # Add your code logic here
+                pass
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                # Add your code logic here
+                pass
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                pass  # Add your code logic here
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                sync_log.status = "cancelled"
+                sync_log.error_message = "تم إلغاء المزامنة بناء على طلب المستخدم"
+                sync_log.end_time = datetime.utcnow()
+                db.session.commit()
+                logger.info("تم تحديث سجل المزامنة بحالة الإلغاء")
+            except Exception as e:
+                logger.error(f"خطأ في تحديث سجل المزامنة: {str(e)}")
+        
+        return True
+    
+    return False
+
+# Function to generate mock attendance data for testing
+def generate_mock_data(start_date, end_date, num_employees=20):
+    """Generate mock attendance data when API is unavailable"""
+    logger.info("Generating mock attendance data for testing")
+    
+    # Convert date strings to date objects if they're strings
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        
+    # Generate a date range
+    date_range = []
+    current_date = start_date
+    while current_date <= end_date:
+        date_range.append(current_date)
+        current_date += timedelta(days=1)
+        
+    # Mock data structure
+    mock_data = []
+    
+    # Employee details
+    employee_names = [
+        ("Ahmed", "Ali"), ("Mohammed", "Ibrahim"), ("Khalid", "Abdullah"), 
+        ("Sara", "Mohammed"), ("Fatima", "Ahmed"), ("Noura", "Sami"),
+        ("Abdullah", "Khalid"), ("Saleh", "Mohammed"), ("Omar", "Yusuf"),
+        ("Aisha", "Abdullah"), ("Huda", "Ali"), ("Maryam", "Hassan"),
+        ("Yusuf", "Ibrahim"), ("Layla", "Ahmed"), ("Nasser", "Khalid"),
+        ("Amina", "Mohammed"), ("Hassan", "Abdullah"), ("Zainab", "Ali"),
+        ("Ibrahim", "Saleh"), ("Nadia", "Sami")
+    ]
+    departments = ["HR", "IT", "Finance", "Operations", "Marketing"]
+    terminals = [
+        ("Terminal_A", "T001", 1), 
+        ("Terminal_B", "T002", 1),
+        ("Terminal_C", "T003", 2),
+        ("Terminal_D", "T004", 2)
+    ]
+    
+    # Generate records
+    for emp_idx in range(1, num_employees+1):
+        emp_code = f"EMP{emp_idx:03d}"
+        first_name, last_name = employee_names[(emp_idx-1) % len(employee_names)]
+        dept_name = departments[(emp_idx-1) % len(departments)]
+        
+        for date in date_range:
+            # Skip weekends randomly (Friday/Saturday in Saudi Arabia)
+            if date.weekday() in [4, 5] and random.random() < 0.7:  # 4=Friday, 5=Saturday
+                continue
+                
+            # Random check-in time between 7:30 AM and 8:30 AM
+            check_in_hour = 7 + random.randint(0, 1)
+            check_in_minute = random.randint(0, 59)
+            check_in_time = f"{check_in_hour:02d}:{check_in_minute:02d}"
+            
+            # Random check-out time between 4:00 PM and 5:30 PM
+            check_out_hour = 16 + random.randint(0, 1)
+            check_out_minute = random.randint(0, 59)
+            check_out_time = f"{check_out_hour:02d}:{check_out_minute:02d}"
+            
+            # Randomly select a terminal
+            terminal_alias, device_id, housing_id = terminals[random.randint(0, len(terminals)-1)]
+            
+            # Add check-in record
+            mock_data.append({
+                "emp_code": emp_code,
+                "first_name": first_name,
+                "last_name": last_name,
+                "dept_name": dept_name,
+                "att_date": date.strftime("%Y-%m-%d"),
+                "punch_time": check_in_time,
+                "punch_state": "check in",
+                "terminal_alias": terminal_alias,
+                "terminal_id": device_id,
+                "housing_id": housing_id
+            })
+            
+            # Add check-out record
+            mock_data.append({
+                "emp_code": emp_code,
+                "first_name": first_name,
+                "last_name": last_name,
+                "dept_name": dept_name,
+                "att_date": date.strftime("%Y-%m-%d"),
+                "punch_time": check_out_time,
+                "punch_state": "check out",
+                "terminal_alias": terminal_alias,
+                "terminal_id": device_id,
+                "housing_id": housing_id
+            })
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(mock_data)
+    return df
+
+def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
+    """
+    وظيفة مبسطة لمزامنة بيانات الحضور من BioTime API. تستخدم طريقة مباشرة بخطوات واضحة:
+    1. جلب البيانات من API
+    2. حفظها في ملف محلي
+    3. معالجة البيانات حسب الاحتياجات
+    4. حفظ البيانات في قاعدة البيانات
+    
+    Args:
+        app: مثيل تطبيق Flask (اختياري لإنشاء سياق التطبيق)
+        request_start_date: تاريخ البداية المطلوب من الجلسة (يتجاوز البيئة)
+        request_end_date: تاريخ النهاية المطلوب من الجلسة (يتجاوز البيئة)
+    
+    Returns:
+        int: عدد السجلات التي تمت مزامنتها بنجاح
+    """
+    # إعادة تعيين حالة المزامنة
+    global CANCEL_SYNC, SYNC_PROGRESS, BIOTIME_API_BASE_URL, MOCK_MODE_ENABLED
+    CANCEL_SYNC = False
+    SYNC_PROGRESS = {"status": "in_progress", "step": "connect", "progress": 10, "message": "بدء المزامنة...", "records": 0, "error": ""}
+    
+    # استيراد المكتبات المطلوبة
+    try:
+        from models import Department, Employee, AttendanceRecord, SyncLog
+        from database import db
+    except ImportError:
+        logger.error("فشل استيراد النماذج أو قاعدة البيانات - التأكد من تشغيل التطبيق في إطار سياق Flask")
+        SYNC_PROGRESS["status"] = "error"
+        SYNC_PROGRESS["error"] = "فشل استيراد النماذج أو قاعدة البيانات"
+        return 0
+    
+    import csv
+    
+    # دفع سياق التطبيق إذا تم تمريره
+    ctx = None
+    if app:
+        ctx = app.app_context()
+        ctx.push()
+    
+    start_time = datetime.utcnow()
+    synced_records = 0
+    sync_log = None
+    temp_file = "attendance_data_tmp.csv"
+    
+    try:
+        # 1. إعداد سجل المزامنة
+        try:
+            sync_log = SyncLog(
+                sync_time=datetime.utcnow(),
+                status="in_progress",
+                departments_synced=",".join(str(d) for d in DEPARTMENTS),
+                records_synced=0,
+                step="connect"
+            )
+            db.session.add(sync_log)
+            db.session.commit()
+            logger.info("تم إنشاء سجل المزامنة بنجاح")
+        except Exception as e:
+            logger.error(f"خطأ في إنشاء سجل المزامنة: {str(e)}")
+            SYNC_PROGRESS["status"] = "error"
+            SYNC_PROGRESS["error"] = f"خطأ في إنشاء سجل المزامنة: {str(e)}"
+            return 0
+
+        # التحقق من الإلغاء
+        if check_cancellation(sync_log, db):
+            return 0
+            
+        # 2. تحديد نطاق التاريخ
+        # Check for date parameters passed directly to the function (from the route handler)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=30)
+        
+        # Use direct parameters if provided, otherwise fall back to environment variables
+        sync_start_date = request_start_date or SYNC_START_DATE
+        sync_end_date = request_end_date or SYNC_END_DATE
+        
+        # Only calculate start_date from end_date if no explicit start date is provided
+        if sync_start_date:
+            # Parse the provided start date
+            start_date = None
+            try:
+                for date_format in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d']:
+                    try:
+                        start_date = datetime.strptime(sync_start_date, date_format).date()
+                        break
+                    except ValueError:
+                        continue
+                
+                if not start_date:
+                    logger.warning(f"Could not parse start date: {sync_start_date}, using default (30 days before end date)")
+                    start_date = end_date - timedelta(days=30)
+                    
+            except Exception as e:
+                logger.error(f"Error processing start date: {str(e)}")
+                start_date = end_date - timedelta(days=30)
+                
+        # Parse end date if provided
+        if sync_end_date:
+            try:
+                for date_format in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d']:
+                    try:
+                        end_date = datetime.strptime(sync_end_date, date_format).date()
+                        break
+                    except ValueError:
+                        continue
+            except Exception:
+                logger.warning(f"Could not parse end date: {sync_end_date}, using current date")
+                # Keep default (today)
+                
+        # Ensure start date is before end date
+        if start_date > end_date:
+            logger.warning("Start date is after end date, swapping dates")
+            start_date, end_date = end_date, start_date
+
+        start_date_str = start_date.strftime('%Y-%m-%d')
+        end_date_str = end_date.strftime('%Y-%m-%d')
+        
+        logger.info(f"نطاق التاريخ للمزامنة: {start_date_str} إلى {end_date_str}")
+        
+        # التحقق من الإلغاء
+        if check_cancellation(sync_log, db):
+            return 0
+
+        # 3. جلب البيانات (من واجهة API أو بيانات وهمية)
+        combined_data = None
+        
+        # Check if we should use mock mode
+        use_mock = MOCK_MODE_ENABLED
+        
+        if not use_mock:
+            # 3.A الاتصال بـ BioTime API وجلب البيانات
+            update_sync_status("connect", 20, "جاري الاتصال بواجهة BioTime API...")
+            
+            if check_cancellation(sync_log, db):
+                return 0
+                
+            try:
+                # تحديث خطوة المزامنة في قاعدة البيانات
+                if sync_log:
+                    sync_log.step = "connect"
+                    db.session.commit()
+                    
+                # تجربة عناوين API المتاحة
+                api_urls = [PRIMARY_API_URL, BACKUP_API_URL]
+                api_error = None
+                retry_count = 0
+                max_retries = 2
+                data_response = None
+                success = False
+                
+                # تنسيق التواريخ للطلب بطريقة صحيحة
+                formatted_start_date = f"{start_date_str}%2000:00:00"
+                formatted_end_date = f"{end_date_str}%2023:59:59"
+                
+                while retry_count < max_retries and not success:
+                    try:
+                        current_url = api_urls[retry_count % len(api_urls)]
+                        logger.info(f"محاولة الاتصال بـ API: {current_url}")
+                        BIOTIME_API_BASE_URL = current_url
+                        
+                        # بناء الرابط الكامل مع المعلمات المطلوبة
+                        full_url = f"{current_url}?export_headers=emp_code,first_name,last_name,dept_name,att_date,punch_time,punch_state,terminal_alias&start_date={formatted_start_date}&end_date={formatted_end_date}&departments={','.join(str(d) for d in DEPARTMENTS)}&employees=-1&page_size=6000&export_type=txt&page=1&limit=6000"
+                        
+                        logger.info(f"استخدام الرابط: {full_url}")
+                        update_sync_status("download", 30, "جاري تنزيل بيانات الحضور...")
+                        
+                        # استخدام مصادقة أساسية (Basic Authentication)
+                        data_response = requests.get(
+                            full_url, 
+                            auth=(BIOTIME_USERNAME, BIOTIME_PASSWORD),
+                            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
+                        )
+                        
+                        if data_response and data_response.status_code == 200:
+                            logger.info("تم الاتصال بنجاح وتم تلقي البيانات")
+                            success = True
+                        else:
+                            logger.warning(f"فشل الاتصال مع {current_url}: {data_response.status_code if data_response else 'No response'}")
+                            retry_count += 1
+                            
+                    except Exception as e:
+                        logger.error(f"خطأ في الاتصال بـ {current_url}: {str(e)}")
+                        api_error = str(e)
+                        retry_count += 1
+                
+                # التحقق من نجاح الاتصال وتلقي بيانات
+                if success and data_response:
+                    # حفظ البيانات في ملف مؤقت
+                    with open(temp_file, 'wb') as f:
+                        f.write(data_response.content)
+                    
+                    logger.info(f"تم حفظ البيانات في ملف مؤقت: {temp_file}")
+                    
+                    # محاولة قراءة البيانات كإطار بيانات pandas
+                    try:
+                        combined_data = pd.read_csv(temp_file, sep='\t', encoding='utf-8')
+                        
+                        if not combined_data.empty:
+                            logger.info(f"تم تحميل {len(combined_data)} سجل من API")
+                            update_sync_status("download", 40, f"تم تنزيل {len(combined_data)} سجل")
+                        else:
+                            logger.warning("تم استلام ملف فارغ من API")
+                            use_mock = True
+                    except Exception as e:
+                        logger.error(f"خطأ في قراءة بيانات من الملف المؤقت: {str(e)}")
+                        use_mock = True
+                else:
+                    logger.warning("فشل الاتصال بـ BioTime API. سيتم استخدام وضع المحاكاة.")
+                    use_mock = True
+                
+            except Exception as e:
+                logger.error(f"خطأ أثناء الاتصال بـ BioTime API: {str(e)}")
+                use_mock = True

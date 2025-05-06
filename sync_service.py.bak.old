@@ -420,7 +420,7 @@ def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
                 total_lines = len(lines) - 1  # Subtract header line
                 
                 for i in range(1, len(lines)):
-                    if i % 250 == 0:  # تقليل عدد التحديثات للتقدم
+                    if i % 100 == 0:
                         # Update progress periodically
                         progress_percent = 35 + int((i / total_lines) * 15)  # Scale between 35% and 50%
                         update_sync_status("extract", progress_percent, f"معالجة السجلات: {i}/{total_lines}", status="in_progress")
@@ -563,7 +563,7 @@ def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
         
         for record in temp_records:
             processed_count += 1
-            if processed_count % 200 == 0:  # تقليل عدد تحديثات حالة التقدم
+            if processed_count % 50 == 0:
                 # Update progress every 50 records
                 progress_percent = 70 + int((processed_count / total_records) * 20)  # Scale between 70% and 90%
                 update_sync_status("save", progress_percent, f"حفظ السجلات: {processed_count}/{total_records}", status="in_progress")

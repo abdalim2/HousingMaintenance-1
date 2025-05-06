@@ -151,24 +151,24 @@
                         <div class="mt-3">
                             <nav aria-label="Page navigation">
                                 <ul class="pagination justify-content-center">
-                                    <li class="page-item {% if pagination.current_page == 1 %}disabled{% endif %}">
-                                        <a class="page-link" href="{{ url_for('sync_results', page=pagination.current_page-1, **filter_data) }}">السابق</a>
+                                    <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+                                        <a class="page-link" href="{{ url_for('sync_results', page=pagination.page-1, **filter_data) }}">السابق</a>
                                     </li>
                                     
-                                    {% for page_num in range(1, pagination.total_pages + 1) %}
-                                        {% if page_num == 1 or page_num == pagination.total_pages or (page_num >= pagination.current_page - 2 and page_num <= pagination.current_page + 2) %}
-                                            <li class="page-item {% if page_num == pagination.current_page %}active{% endif %}">
+                                    {% for page_num in range(1, pagination.pages + 1) %}
+                                        {% if page_num == 1 or page_num == pagination.pages or (page_num >= pagination.page - 2 and page_num <= pagination.page + 2) %}
+                                            <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
                                                 <a class="page-link" href="{{ url_for('sync_results', page=page_num, **filter_data) }}">{{ page_num }}</a>
                                             </li>
-                                        {% elif page_num == 2 or page_num == pagination.total_pages - 1 %}
+                                        {% elif page_num == 2 or page_num == pagination.pages - 1 %}
                                             <li class="page-item disabled">
                                                 <a class="page-link" href="#">...</a>
                                             </li>
                                         {% endif %}
                                     {% endfor %}
                                     
-                                    <li class="page-item {% if pagination.current_page == pagination.total_pages %}disabled{% endif %}">
-                                        <a class="page-link" href="{{ url_for('sync_results', page=pagination.current_page+1, **filter_data) }}">التالي</a>
+                                    <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
+                                        <a class="page-link" href="{{ url_for('sync_results', page=pagination.page+1, **filter_data) }}">التالي</a>
                                     </li>
                                 </ul>
                             </nav>

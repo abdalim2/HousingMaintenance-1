@@ -24,6 +24,15 @@ if (!(Test-Path -Path $PROFILE)) {
     Write-Host "$($RTL_MARK)تم إنشاء ملف تعريف PowerShell جديد" -ForegroundColor Green
 }
 
+# تعريف وظيفة لعرض النص العربي بشكل صحيح
+function Write-Arabic {
+    param(
+        [string]$Text,
+        [string]$ForegroundColor = "White"
+    )
+    Write-Host "$($RTL_MARK)$Text" -ForegroundColor $ForegroundColor
+}
+
 # إضافة إعدادات اللغة العربية إلى ملف التعريف
 $profileContent = @"
 # تمكين دعم اللغة العربية
@@ -39,90 +48,184 @@ $profileContent = @"
 
 # وظيفة مساعدة لعرض النص العربي بشكل صحيح
 function Write-Arabic {
-    param([string]`$Text, [string]`$ForegroundColor = "White")
+    param(
+        [string]`$Text,
+        [string]`$ForegroundColor = "White"
+    )
     Write-Host "`$(`$RTL_MARK)`$Text" -ForegroundColor `$ForegroundColor
+}
+
+# وظيفة لتصحيح عرض النص العربي في الأمر Echo
+function Echo-Arabic {
+    param([string]`$Text)
+    Echo "`$([char]0x200F)`$Text"
+}
+
+# تجاوز الأمر Echo الأصلي لإضافة دعم أفضل للغة العربية
+function global:Echo {
+    param([string]`$Text)
+    if (`$Text -match '[\u0600-\u06FF]') {
+        Echo-Arabic `$Text
+    } else {
+        Microsoft.PowerShell.Utility\Echo `$Text
+    }
 }
 "@
 
 Add-Content -Path $PROFILE -Value $profileContent -Encoding UTF8
 
-# تعريف وظيفة لعرض النص العربي بشكل صحيح
-function Write-Arabic {
-    param([string]$Text, [string]$ForegroundColor = "White")
-    Write-Host "$($RTL_MARK)$Text" -ForegroundColor $ForegroundColor
-}
-
-# تثبيت وحدة مفيدة للتعامل مع النص العربي إذا كانت غير موجودة
-$requiredModule = "StringFormatting"
-if (-not (Get-Module -ListAvailable -Name $requiredModule)) {
-    Write-Host "جاري محاولة تثبيت وحدة $requiredModule لتحسين دعم اللغة العربية..." -ForegroundColor Yellow
-    try {
-        Install-Module -Name $requiredModule -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
-        Write-Host "تم تثبيت وحدة $requiredModule بنجاح" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "لم يتم تثبيت وحدة $requiredModule. قد تحتاج إلى تثبيتها يدوياً: Install-Module -Name $requiredModule -Force" -ForegroundColor Red
-    }
-}
-
 # نصائح لتحسين دعم اللغة العربية
 Write-Host "`n=== تعليمات مفيدة لدعم اللغة العربية ===`n" -ForegroundColor Cyan
 
-Write-Arabic "1. قم بتغيير خط وحدة التحكم PowerShell إلى خط يدعم اللغة العربية مثل:" "Yellow"
-Write-Host "   - Courier New" -ForegroundColor White 
-Write-Host "   - Arial" -ForegroundColor White
-Write-Host "   - Microsoft Sans Serif" -ForegroundColor White
-Write-Host "   - Traditional Arabic" -ForegroundColor White
-Write-Arabic "   يمكنك القيام بذلك عن طريق النقر بزر الماوس الأيمن على شريط عنوان PowerShell > خصائص > خط" "Gray"
+Write-Arabic "1. استخدم دائمًا الرمز الخاص قبل النصوص العربية" "Yellow"
+Write-Host "   $([char]0x200F)نص عربي" -ForegroundColor White
 
-Write-Arabic "`n2. استخدم الوظيفة الجديدة Write-Arabic لعرض النص العربي بشكل صحيح:" "Yellow"
-Write-Host "   Write-Arabic `"النص العربي الخاص بك`"" -ForegroundColor White
+Write-Arabic "2. في Python أضف الرمز \u200F قبل النصوص العربية:" "Yellow"
+Write-Host '   print("\u200Fنص عربي")' -ForegroundColor White
 
-Write-Arabic "`n3. عند تشغيل نصوص Python التي تحتوي على نص عربي، استخدم:" "Yellow"
-Write-Host "   python -X utf8 your_script.py" -ForegroundColor White
+Write-Arabic "3. لتصحيح عرض النص العربي في سطر الأوامر، استخدم:" "Yellow"
+Write-Host "   Echo-Arabic `"النص العربي`"" -ForegroundColor White
 
-Write-Arabic "`n4. إعادة تشغيل PowerShell لتطبيق الإعدادات الجديدة بشكل كامل" "Yellow"
+Write-Arabic "4. تحقق من تكوين محرر النصوص للتأكد من أنه يدعم UTF-8" "Yellow"
 
-Write-Arabic "`n5. تفعيل دعم PowerShell Core لعرض أفضل للغة العربية:" "Yellow"
-Write-Host "   قم بتثبيت PowerShell 7 من الموقع الرسمي:" -ForegroundColor White
-Write-Host "   https://aka.ms/powershell-release?tag=stable" -ForegroundColor White
+Write-Arabic "5. في ملفات HTML، استخدم dir=rtl للعناصر العربية:" "Yellow"
+Write-Host '   <div dir="rtl">نص عربي</div>' -ForegroundColor White
 
-Write-Arabic "`n=== تم إعداد PowerShell لدعم اللغة العربية! ===" "Green"
+Write-Arabic "`n=== إجراءات فورية لإصلاح مشكلة النص المعكوس ===`n" "Green"
 
-# اختبار الإعدادات
-Write-Arabic "`nاختبار دعم اللغة العربية:" "Magenta"
-Write-Arabic "هذا نص باللغة العربية للتأكد من أن الإعدادات تعمل بشكل صحيح" "White"
+# تحديث جميع ملفات Python لتضمين علامات RTL
+$pythonFilesWithArabic = Get-ChildItem -Path "d:\CPC holding co\Sacodeco Housing - General\BiometricSync" -Filter "*.py" | Where-Object { 
+    $content = Get-Content -Path $_.FullName -Raw -ErrorAction SilentlyContinue
+    $content -match '[\u0600-\u06FF]'
+}
 
-# تعديل ملفات Python ليستخدموا علامات اتجاه النص
-Write-Arabic "`nهل تريد تعديل ملفات Python للاستخدام المثالي مع اللغة العربية؟ (نعم/لا)" "Yellow"
-$response = Read-Host
+if ($pythonFilesWithArabic) {
+    Write-Arabic "تم العثور على ملفات Python تحتوي على نصوص عربية:" "Magenta"
+    foreach ($file in $pythonFilesWithArabic) {
+        Write-Host "   - $($file.Name)" -ForegroundColor White
+    }
+    
+    Write-Arabic "`nلتصحيح عرض النصوص العربية في هذه الملفات، أضف '\u200F' قبل كل نص عربي." "Yellow"
+    Write-Arabic "مثال:" "White"
+    Write-Host '   arabic_text = "\u200Fنص عربي"' -ForegroundColor White
+    Write-Host '   print(f"\u200Fمرحباً {name}")' -ForegroundColor White
+}
 
-if ($response -eq "نعم" -or $response -eq "ن" -or $response -eq "y" -or $response -eq "yes") {
-    # تعديل الملفات التي تحتوي على نص عربي
-    try {
-        $syncServicePath = "d:\CPC holding co\Sacodeco Housing - General\BiometricSync\sync_service.py"
-        if (Test-Path $syncServicePath) {
-            $content = Get-Content $syncServicePath -Raw -Encoding UTF8
-            # إضافة تعريف علامات الاتجاه في بداية الملف
-            if (-not $content.Contains("RTL_MARK")) {
-                $RTL_CODE = @"
-# علامات خاصة للتحكم في اتجاه النص العربي
-RTL_MARK = '\u200F'  # علامة النص من اليمين إلى اليسار
-LTR_MARK = '\u200E'  # علامة النص من اليسار إلى اليمين
+# اختبار النص العربي
+Write-Arabic "`n=== اختبار العرض ===`n" "Cyan"
+Write-Arabic "اختبار النص العربي: هذا نص باللغة العربية" "Green"
 
+# إنشاء ملف مساعدة منفصل للتعامل مع النص العربي في Python
+$pythonHelperContent = @"
+# -*- coding: utf-8 -*-
+# arabic_helper.py - وظائف مساعدة للتعامل مع النصوص العربية في Python
+
+# علامات تحكم خاصة للنص العربي
+RTL_MARK = "\u200F"  # علامة النص من اليمين إلى اليسار
+LTR_MARK = "\u200E"  # علامة النص من اليسار إلى اليمين
+
+def arabic_text(text):
+    """
+    تضيف علامة RTL إلى النص العربي لعرضه بشكل صحيح
+    
+    Args:
+        text (str): النص العربي المراد عرضه
+        
+    Returns:
+        str: النص مع علامة RTL
+    """
+    return RTL_MARK + text
+
+def arabic_print(text, *args, **kwargs):
+    """
+    تطبع نصًا عربيًا مع إضافة علامة RTL
+    """
+    print(RTL_MARK + text, *args, **kwargs)
+
+def fix_arabic_in_dict(data_dict):
+    """
+    تصحيح جميع النصوص العربية في قاموس
+    """
+    for key, value in data_dict.items():
+        if isinstance(value, str) and any(ord(c) >= 0x600 and ord(c) <= 0x6FF for c in value):
+            data_dict[key] = RTL_MARK + value
+    return data_dict
 "@
-                $content = $RTL_CODE + $content
-                # تطبيق علامة RTL على النصوص العربية
-                $content = $content -replace '("[\u0600-\u06FF\s]+?")', '"' + $RTL_MARK + '\1'
-                Set-Content -Path $syncServicePath -Value $content -Encoding UTF8
-                Write-Arabic "تم تعديل ملف $syncServicePath لدعم اللغة العربية بشكل أفضل" "Green"
+
+Set-Content -Path "d:\CPC holding co\Sacodeco Housing - General\BiometricSync\arabic_helper.py" -Value $pythonHelperContent -Encoding UTF8
+Write-Arabic "تم إنشاء ملف 'arabic_helper.py' للمساعدة في دعم اللغة العربية في Python" "Green"
+
+# إنشاء ملف JavaScript للتعامل مع النص العربي في المتصفح
+$jsHelperContent = @"
+/**
+ * arabic_helper.js - وظائف مساعدة للتعامل مع النصوص العربية في JavaScript
+ */
+
+// علامات تحكم خاصة للنص العربي
+const RTL_MARK = "\u200F";  // علامة النص من اليمين إلى اليسار
+const LTR_MARK = "\u200E";  // علامة النص من اليسار إلى اليمين
+
+/**
+ * تضيف علامة RTL إلى النص العربي لعرضه بشكل صحيح
+ * @param {string} text - النص العربي المراد عرضه
+ * @return {string} النص مع علامة RTL
+ */
+function arabicText(text) {
+    return RTL_MARK + text;
+}
+
+/**
+ * تطبق اتجاه RTL على جميع العناصر العربية في الصفحة
+ */
+function fixArabicDisplay() {
+    // حدد جميع العناصر التي تحتوي على نص عربي
+    const arabicRegex = /[\u0600-\u06FF]/;
+    const textNodes = [];
+    
+    function findTextNodes(element) {
+        if (element.nodeType === Node.TEXT_NODE) {
+            if (arabicRegex.test(element.nodeValue)) {
+                textNodes.push(element);
             }
-            else {
-                Write-Arabic "ملف $syncServicePath يحتوي بالفعل على تعريفات لدعم اتجاه النص العربي" "Yellow"
+        } else {
+            for (let i = 0; i < element.childNodes.length; i++) {
+                findTextNodes(element.childNodes[i]);
             }
         }
     }
-    catch {
-        Write-Arabic "حدث خطأ أثناء محاولة تعديل ملفات Python: $_" "Red"
+    
+    findTextNodes(document.body);
+    
+    // أضف علامة RTL إلى النصوص العربية
+    for (let node of textNodes) {
+        if (!node.parentElement.hasAttribute('dir')) {
+            node.parentElement.setAttribute('dir', 'rtl');
+        }
+        if (!node.nodeValue.startsWith(RTL_MARK)) {
+            node.nodeValue = RTL_MARK + node.nodeValue;
+        }
     }
 }
+
+// تنفيذ الدالة عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', fixArabicDisplay);
+"@
+
+# إنشاء دليل JavaScript إذا لم يكن موجوداً
+$jsPath = "d:\CPC holding co\Sacodeco Housing - General\BiometricSync\static\js"
+if (!(Test-Path -Path $jsPath)) {
+    New-Item -ItemType Directory -Path $jsPath -Force | Out-Null
+}
+
+Set-Content -Path "$jsPath\arabic_helper.js" -Value $jsHelperContent -Encoding UTF8
+Write-Arabic "تم إنشاء ملف 'arabic_helper.js' للمساعدة في دعم اللغة العربية في المتصفح" "Green"
+
+# اختبار الإعدادات
+Write-Arabic "`nاكتب أي نص عربي للتحقق من عرضه بشكل صحيح. (اكتب 'خروج' للإنهاء):" "Magenta"
+do {
+    $testText = Read-Host
+    if ($testText -ne "خروج" -and $testText -ne "exit") {
+        Write-Arabic $testText "Green"
+        Write-Host "$([char]0x200F)$testText" -ForegroundColor Yellow
+    }
+} while ($testText -ne "خروج" -and $testText -ne "exit")

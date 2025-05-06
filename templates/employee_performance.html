@@ -1,0 +1,751 @@
+{% extends "layout.html" %}
+
+{% block title %}تقييم أداء الموظف{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">الرئيسية</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('departments') }}">الأقسام</a></li>
+                    <li class="breadcrumb-item active">تقييم أداء الموظف</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="m-0">
+                    <i class="fas fa-user-chart me-2"></i> <span id="employee-name">تحليل أداء الموظف</span>
+                </h1>
+                <div>
+                    <select id="time-range" class="form-select">
+                        <option value="30">آخر 30 يوم</option>
+                        <option value="60">آخر 60 يوم</option>
+                        <option value="90">آخر 90 يوم</option>
+                        <option value="180">آخر 6 أشهر</option>
+                        <option value="365">آخر سنة</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <!-- موجز الأداء -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tachometer-alt me-2"></i> موجز الأداء
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <canvas id="performance-gauge" height="200"></canvas>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-4">
+                            <div class="small text-muted">الحضور</div>
+                            <div class="progress mt-1">
+                                <div id="attendance-score-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="small text-muted">الانتظام</div>
+                            <div class="progress mt-1">
+                                <div id="consistency-score-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="small text-muted">ساعات العمل</div>
+                            <div class="progress mt-1">
+                                <div id="hours-score-bar" class="progress-bar bg-warning" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <th>المهنة:</th>
+                                    <td id="employee-profession">-</td>
+                                </tr>
+                                <tr>
+                                    <th>أيام الحضور:</th>
+                                    <td id="present-days">-</td>
+                                </tr>
+                                <tr>
+                                    <th>أيام الغياب:</th>
+                                    <td id="absent-days">-</td>
+                                </tr>
+                                <tr>
+                                    <th>أيام الإجازة:</th>
+                                    <td id="vacation-days">-</td>
+                                </tr>
+                                <tr>
+                                    <th>نسبة الحضور:</th>
+                                    <td id="attendance-rate">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- تحليل ساعات العمل -->
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i> تحليل ساعات العمل
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="work-hours-chart" height="250"></canvas>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-4 text-center">
+                            <div class="small text-muted">متوسط ساعات العمل</div>
+                            <div class="h3 mb-0" id="avg-hours">-</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="small text-muted">الساعات المستهدفة</div>
+                            <div class="h3 mb-0" id="target-hours">-</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="small text-muted">معدل الانتظام</div>
+                            <div class="h3 mb-0" id="consistency-score">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <!-- خريطة حرارية للحضور -->
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-check me-2"></i> خريطة الحضور
+                    </h5>
+                </div>
+                <div class="card-body overflow-auto">
+                    <div id="attendance-heatmap"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- أنماط الحضور -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i> أنماط الحضور
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="attendance-patterns-chart" height="200"></canvas>
+                    
+                    <div class="mt-4" id="patterns-analysis">
+                        <h6>تحليل الأنماط</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check-circle text-success me-2"></i> <span id="pattern-1">جاري التحليل...</span></li>
+                            <li><i class="fas fa-info-circle text-info me-2"></i> <span id="pattern-2">جاري التحليل...</span></li>
+                            <li><i class="fas fa-exclamation-triangle text-warning me-2"></i> <span id="pattern-3">جاري التحليل...</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- جدول تفاصيل الحضور -->
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i> سجل الحضور التفصيلي
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="attendance-records">
+                            <thead>
+                                <tr>
+                                    <th>التاريخ</th>
+                                    <th>اليوم</th>
+                                    <th>الحالة</th>
+                                    <th>وقت الحضور</th>
+                                    <th>وقت الانصراف</th>
+                                    <th>ساعات العمل</th>
+                                    <th>الساعات الإضافية</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center">جارِ تحميل البيانات...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة التوصيات -->
+<div class="modal fade" id="recommendationsModal" tabindex="-1" aria-labelledby="recommendationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="recommendationsModalLabel">
+                    <i class="fas fa-lightbulb me-2"></i> توصيات لتحسين الأداء
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="recommendations-container">
+                    <!-- سيتم تحميل المحتوى هنا -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary" id="print-recommendations">
+                    <i class="fas fa-print me-2"></i> طباعة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // استخراج معرّف الموظف من URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const employeeId = urlParams.get('id');
+        const initialDays = 30;
+        
+        if (!employeeId) {
+            alert('لم يتم تحديد الموظف. سيتم توجيهك للصفحة الرئيسية.');
+            window.location.href = '/';
+            return;
+        }
+        
+        // تهيئة محلل البيانات مع الخيارات المناسبة
+        const analytics = new AttendanceAnalytics({
+            lang: 'ar',  // اللغة العربية
+            colorScheme: 'dark',  // مخطط الألوان
+            animationDuration: 800  // مدة الرسوم المتحركة للرسومات البيانية
+        });
+        
+        // تحميل بيانات الموظف
+        loadEmployeeData(employeeId, initialDays);
+        
+        // معالج تغيير النطاق الزمني
+        document.getElementById('time-range').addEventListener('change', function() {
+            const days = parseInt(this.value);
+            loadEmployeeData(employeeId, days);
+        });
+        
+        // تحميل بيانات الموظف وعرضها
+        function loadEmployeeData(employeeId, days) {
+            fetch(`/api/employee/performance/${employeeId}?days=${days}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('فشل تحميل بيانات الموظف');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.error || 'حدث خطأ أثناء جلب بيانات الموظف');
+                    }
+                    
+                    // عرض معلومات الموظف الأساسية
+                    displayEmployeeInfo(data.employee);
+                    
+                    // عرض بيانات الأداء
+                    displayPerformanceMetrics(data.performance);
+                    
+                    // تحويل بيانات الحضور للتنسيق المطلوب لعرض خريطة الحضور الحرارية
+                    const attendanceData = transformAttendanceData(data.attendance_data);
+                    
+                    // إنشاء خريطة الحضور الحرارية
+                    analytics.createAttendanceHeatmap('attendance-heatmap', attendanceData);
+                    
+                    // إنشاء مقياس الأداء
+                    analytics.createPerformanceGauge('performance-gauge', data.performance.score);
+                    
+                    // إنشاء مخطط ساعات العمل
+                    createWorkHoursChart(data.attendance_data);
+                    
+                    // إنشاء مخطط أنماط الحضور
+                    createAttendancePatternChart(data.attendance_data);
+                    
+                    // ملء جدول السجلات التفصيلية
+                    populateAttendanceTable(data.attendance_data);
+                    
+                    // تحليل الأنماط
+                    analyzePatterns(data.attendance_data, data.performance);
+                })
+                .catch(error => {
+                    console.error('Error loading employee data:', error);
+                    alert(`خطأ في تحميل بيانات الموظف: ${error.message}`);
+                });
+        }
+        
+        // عرض معلومات الموظف الأساسية
+        function displayEmployeeInfo(employee) {
+            document.getElementById('employee-name').textContent = employee.name;
+            document.getElementById('employee-profession').textContent = employee.profession || 'غير محدد';
+            document.getElementById('target-hours').textContent = `${employee.daily_hours} ساعة`;
+        }
+        
+        // عرض مقاييس الأداء
+        function displayPerformanceMetrics(performance) {
+            // عرض معلومات الحضور
+            document.getElementById('present-days').textContent = `${performance.overall.present_days} يوم`;
+            document.getElementById('absent-days').textContent = `${performance.overall.absent_days} يوم`;
+            document.getElementById('vacation-days').textContent = `${performance.overall.vacation_days} يوم`;
+            document.getElementById('attendance-rate').textContent = `${performance.overall.attendance_rate}%`;
+            
+            // متوسط ساعات العمل
+            document.getElementById('avg-hours').textContent = `${performance.work_hours.average} ساعة`;
+            
+            // معدل الانتظام
+            document.getElementById('consistency-score').textContent = `${performance.consistency.score}%`;
+            
+            // تحديث أشرطة التقدم
+            updateProgressBar('attendance-score-bar', performance.score.components.attendance.score);
+            updateProgressBar('consistency-score-bar', performance.score.components.consistency.score);
+            updateProgressBar('hours-score-bar', performance.score.components.hours.score);
+        }
+        
+        // تحديث شريط التقدم
+        function updateProgressBar(id, value) {
+            const bar = document.getElementById(id);
+            bar.style.width = `${value}%`;
+            bar.setAttribute('aria-valuenow', value);
+            bar.textContent = `${Math.round(value)}%`;
+            
+            // تعيين لون الشريط بناءً على القيمة
+            bar.className = 'progress-bar';
+            if (value >= 90) {
+                bar.classList.add('bg-success');
+            } else if (value >= 70) {
+                bar.classList.add('bg-info');
+            } else if (value >= 50) {
+                bar.classList.add('bg-warning');
+            } else {
+                bar.classList.add('bg-danger');
+            }
+        }
+        
+        // تحويل بيانات الحضور إلى التنسيق المطلوب لخريطة الحضور الحرارية
+        function transformAttendanceData(records) {
+            return records.map(record => ({
+                date: record.date,
+                employee: document.getElementById('employee-name').textContent,
+                status: record.status
+            }));
+        }
+        
+        // إنشاء مخطط ساعات العمل
+        function createWorkHoursChart(records) {
+            const ctx = document.getElementById('work-hours-chart').getContext('2d');
+            
+            // تنظيم البيانات حسب التاريخ
+            const labels = [];
+            const hours = [];
+            const overtime = [];
+            
+            // فرز السجلات حسب التاريخ
+            records.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // استخراج البيانات
+            records.forEach(record => {
+                const date = new Date(record.date);
+                // تنسيق التاريخ كـ "اليوم الشهر" (مثلا: 15 أبريل)
+                const day = date.getDate();
+                
+                // الحصول على اسم الشهر بالعربية من محلل البيانات
+                const monthIdx = date.getMonth();
+                const monthName = analytics.monthNames.ar[monthIdx];
+                
+                const formattedDate = `${day} ${monthName.substring(0, 3)}`;
+                labels.push(formattedDate);
+                
+                // إضافة ساعات العمل والساعات الإضافية
+                hours.push(record.status === 'P' ? record.hours : 0);
+                overtime.push(record.status === 'P' ? record.overtime : 0);
+            });
+            
+            // إنشاء المخطط
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'ساعات العمل',
+                            data: hours,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'الساعات الإضافية',
+                            data: overtime,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: 'white'
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'white'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'white',
+                                callback: function(value) {
+                                    return value + ' ساعة';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // إنشاء مخطط أنماط الحضور
+        function createAttendancePatternChart(records) {
+            const ctx = document.getElementById('attendance-patterns-chart').getContext('2d');
+            
+            // حساب عدد أيام الأسبوع لكل حالة حضور
+            const weekdayCounts = {
+                0: {P: 0, A: 0, V: 0}, // الأحد
+                1: {P: 0, A: 0, V: 0}, // الإثنين
+                2: {P: 0, A: 0, V: 0}, // الثلاثاء
+                3: {P: 0, A: 0, V: 0}, // الأربعاء
+                4: {P: 0, A: 0, V: 0}, // الخميس
+                5: {P: 0, A: 0, V: 0}, // الجمعة
+                6: {P: 0, A: 0, V: 0}  // السبت
+            };
+            
+            // تجميع البيانات حسب اليوم والحالة
+            records.forEach(record => {
+                const date = new Date(record.date);
+                const dayOfWeek = date.getDay();
+                const status = record.status;
+                
+                if (status === 'P' || status === 'A' || status === 'V') {
+                    weekdayCounts[dayOfWeek][status]++;
+                }
+            });
+            
+            // تحضير البيانات للمخطط
+            const labels = analytics.dayNames.ar; // أيام الأسبوع بالعربية
+            const present = [];
+            const absent = [];
+            const vacation = [];
+            
+            for (let i = 0; i < 7; i++) {
+                const counts = weekdayCounts[i];
+                const total = counts.P + counts.A + counts.V || 1; // لتجنب القسمة على صفر
+                present.push((counts.P / total) * 100);
+                absent.push((counts.A / total) * 100);
+                vacation.push((counts.V / total) * 100);
+            }
+            
+            // إنشاء المخطط
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'الحضور',
+                            data: present,
+                            backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                            borderColor: 'rgba(40, 167, 69, 1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgba(40, 167, 69, 1)'
+                        },
+                        {
+                            label: 'الغياب',
+                            data: absent,
+                            backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgba(220, 53, 69, 1)'
+                        },
+                        {
+                            label: 'الإجازات',
+                            data: vacation,
+                            backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                            borderColor: 'rgba(255, 193, 7, 1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgba(255, 193, 7, 1)'
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        r: {
+                            angleLines: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            pointLabels: {
+                                color: 'white'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)',
+                                backdropColor: 'rgba(0, 0, 0, 0.7)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'white'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // تحليل الأنماط
+        function analyzePatterns(records, performance) {
+            // استخراج الأيام التي يكون فيها الحضور منخفضًا
+            const weekdayStats = countAttendanceByWeekday(records);
+            
+            // الأيام ذات نسبة الحضور الأعلى والأدنى
+            const sortedDays = Object.entries(weekdayStats)
+                .map(([day, stats]) => ({
+                    day: parseInt(day),
+                    present: stats.P,
+                    total: stats.total,
+                    rate: stats.total > 0 ? (stats.P / stats.total * 100) : 0
+                }))
+                .sort((a, b) => b.rate - a.rate);
+            
+            const bestDay = sortedDays[0];
+            const worstDay = sortedDays[sortedDays.length - 1];
+            
+            // تحليل ساعات العمل
+            const targetHours = document.getElementById('target-hours').textContent.split(' ')[0];
+            const avgHours = performance.work_hours.average;
+            const hoursDiff = avgHours - targetHours;
+            
+            // تعيين النصوص للأنماط
+            if (bestDay) {
+                document.getElementById('pattern-1').textContent = 
+                    `أفضل حضور يكون في يوم ${analytics.dayNames.ar[bestDay.day]} بنسبة ${bestDay.rate.toFixed(1)}%`;
+            }
+            
+            if (worstDay && worstDay.total > 0) {
+                document.getElementById('pattern-2').textContent = 
+                    `أقل حضور يكون في يوم ${analytics.dayNames.ar[worstDay.day]} بنسبة ${worstDay.rate.toFixed(1)}%`;
+            }
+            
+            // تحليل ساعات العمل
+            if (Math.abs(hoursDiff) < 0.5) {
+                document.getElementById('pattern-3').textContent = 
+                    `متوسط ساعات العمل متوافق مع الساعات المستهدفة`;
+            } else if (hoursDiff > 0) {
+                document.getElementById('pattern-3').textContent = 
+                    `يعمل بمتوسط ${hoursDiff.toFixed(1)} ساعة إضافية يوميًا عن المستهدف`;
+            } else {
+                document.getElementById('pattern-3').textContent = 
+                    `يعمل بمتوسط ${Math.abs(hoursDiff).toFixed(1)} ساعة أقل من المستهدف يوميًا`;
+            }
+        }
+        
+        // حساب الحضور حسب أيام الأسبوع
+        function countAttendanceByWeekday(records) {
+            const weekdayStats = {
+                0: {P: 0, A: 0, V: 0, total: 0}, // الأحد
+                1: {P: 0, A: 0, V: 0, total: 0}, // الإثنين
+                2: {P: 0, A: 0, V: 0, total: 0}, // الثلاثاء
+                3: {P: 0, A: 0, V: 0, total: 0}, // الأربعاء
+                4: {P: 0, A: 0, V: 0, total: 0}, // الخميس
+                5: {P: 0, A: 0, V: 0, total: 0}, // الجمعة
+                6: {P: 0, A: 0, V: 0, total: 0}  // السبت
+            };
+            
+            records.forEach(record => {
+                const date = new Date(record.date);
+                const dayOfWeek = date.getDay();
+                const status = record.status;
+                
+                // زيادة العدد الإجمالي وعدد الحضور/الغياب/الإجازة
+                weekdayStats[dayOfWeek].total += 1;
+                if (status === 'P' || status === 'A' || status === 'V') {
+                    weekdayStats[dayOfWeek][status] += 1;
+                }
+            });
+            
+            return weekdayStats;
+        }
+        
+        // ملء جدول السجلات التفصيلية
+        function populateAttendanceTable(records) {
+            const tbody = document.querySelector('#attendance-records tbody');
+            tbody.innerHTML = ''; // مسح المحتوى الحالي
+            
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد سجلات حضور</td></tr>';
+                return;
+            }
+            
+            // فرز السجلات حسب التاريخ (الأحدث أولاً)
+            records.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            records.forEach(record => {
+                const date = new Date(record.date);
+                
+                // الحصول على اسم اليوم بالعربية
+                const dayOfWeek = date.getDay();
+                const dayName = analytics.dayNames.ar[dayOfWeek];
+                
+                // تنسيق التاريخ
+                const formattedDate = date.toLocaleDateString('ar-SA');
+                
+                // تحديد لون وحالة السجل
+                let statusClass = '', statusText = '';
+                switch (record.status) {
+                    case 'P':
+                        statusClass = 'success';
+                        statusText = 'حاضر';
+                        break;
+                    case 'A':
+                        statusClass = 'danger';
+                        statusText = 'غائب';
+                        break;
+                    case 'V':
+                        statusClass = 'warning';
+                        statusText = 'إجازة';
+                        break;
+                    case 'S':
+                        statusClass = 'info';
+                        statusText = 'مريض';
+                        break;
+                    default:
+                        statusClass = 'secondary';
+                        statusText = record.status;
+                }
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${formattedDate}</td>
+                    <td>${dayName}</td>
+                    <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                    <td>${record.clockIn || '-'}</td>
+                    <td>${record.clockOut || '-'}</td>
+                    <td>${record.hours > 0 ? record.hours.toFixed(2) : '-'}</td>
+                    <td>${record.overtime > 0 ? record.overtime.toFixed(2) : '-'}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        // معالج زر طباعة التوصيات
+        document.getElementById('print-recommendations').addEventListener('click', function() {
+            // فتح نافذة جديدة للطباعة
+            const printWindow = window.open('', '_blank');
+            
+            // إعداد محتوى الصفحة للطباعة
+            const content = document.getElementById('recommendations-container').innerHTML;
+            const employeeName = document.getElementById('employee-name').textContent;
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html dir="rtl" lang="ar">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>توصيات تحسين الأداء - ${employeeName}</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { 
+                            font-family: Arial, sans-serif;
+                            padding: 20px;
+                            direction: rtl; 
+                        }
+                        .header {
+                            text-align: center;
+                            margin-bottom: 30px;
+                        }
+                        .recommendations {
+                            margin-top: 20px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>توصيات تحسين الأداء</h1>
+                        <h3>${employeeName}</h3>
+                        <p>تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p>
+                    </div>
+                    <div class="recommendations">
+                        ${content}
+                    </div>
+                </body>
+                </html>
+            `);
+            
+            // إغلاق مستند الكتابة وعرض نافذة الطباعة
+            printWindow.document.close();
+            printWindow.focus();
+            
+            // طباعة بعد تحميل الصفحة
+            printWindow.onload = function() {
+                printWindow.print();
+            };
+        });
+    });
+</script>
+{% endblock %}

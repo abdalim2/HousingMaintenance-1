@@ -1,5 +1,6 @@
 import os
 import logging
+import threading
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session, g
 from werkzeug.middleware.proxy_fix import ProxyFix
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -41,12 +42,11 @@ os.environ["DATABASE_URL"] = "postgresql://neondb_owner:npg_rj0wp9bMRXox@ep-odd-
 init_db(app)
 
 # Import models after db initialization to avoid circular imports
-from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod
+from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod, Housing, BiometricTerminal
 
 # Import the AI module
 from ai_analytics import BiometricAI
 
-# Set up pre-request handlers for language
 @app.before_request
 def before_request():
     # Set default language if not in session
@@ -104,6 +104,12 @@ def index():
     """Home page showing dashboard overview"""
     return render_template('index.html')
 
+@app.route('/dashboard/ar')
+def arabic_dashboard():
+    """Arabic version of the dashboard"""
+    session['language'] = 'ar'  # Set language to Arabic
+    return render_template('dashboard_ar.html')
+
 @app.route('/timesheet')
 def timesheet():
     """View monthly timesheet"""
@@ -111,23 +117,60 @@ def timesheet():
     year = request.args.get('year', data_processor.get_current_year())
     month = request.args.get('month', data_processor.get_current_month())
     dept_id = request.args.get('department', None)
+    housing_id = request.args.get('housing', None)  # جديد: معرف السكن للتصفية
     
-    # Get departments for filter dropdown
+    # Check for custom start and end dates from month configuration
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Get departments and housings for filter dropdown
     departments = Department.query.all()
+    housings = Housing.query.all()  # جديد: قائمة المساكن للتصفية
+    
+    # Get month configuration periods
+    month_dates = {}
+    try:
+        month_periods = MonthPeriod.query.all()
+        for period in month_periods:
+            # Extract the month from month_code (format: MM/YY)
+            month_num = int(period.month_code.split('/')[0]) if period.month_code else 0
+            
+            month_dates[month_num] = {
+                'start': period.start_date.strftime('%Y-%m-%d') if period.start_date else None,
+                'end': period.end_date.strftime('%Y-%m-%d') if period.end_date else None
+            }
+        logger.info(f"Loaded {len(month_dates)} month configurations")
+    except Exception as e:
+        logger.error(f"Error loading month configurations: {str(e)}")
+        month_dates = {}
     
     # Check if employees exist
-    employee_count = Employee.query.count()
-    logger.info(f"Total employees in database: {employee_count}")
+    try:
+        # Only select columns that definitely exist to avoid the housing_id error
+        employee_count = db.session.query(db.func.count(Employee.id)).scalar()
+        logger.info(f"Total employees in database: {employee_count}")
+        
+        # Log attendance record count
+        attendance_count = AttendanceRecord.query.count()
+        logger.info(f"Total attendance records in database: {attendance_count}")
+    except Exception as e:
+        logger.error(f"Error checking database counts: {str(e)}")
+        employee_count = 0
+        attendance_count = 0
     
-    # Log attendance record count
-    attendance_count = AttendanceRecord.query.count()
-    logger.info(f"Total attendance records in database: {attendance_count}")
+    # If custom start/end dates are provided, use them
+    # Otherwise, check if month configuration exists for the selected month
+    if not start_date and not end_date and int(month) in month_dates:
+        month_config = month_dates[int(month)]
+        start_date = month_config.get('start')
+        end_date = month_config.get('end')
+        logger.info(f"Using configured dates for month {month}: {start_date} to {end_date}")
     
     # Process and format timesheet data
     try:
-        timesheet_data = data_processor.generate_timesheet(year, month, dept_id)
+        timesheet_data = data_processor.generate_timesheet(year, month, dept_id, start_date, end_date, housing_id)
         if timesheet_data.get('total_employees', 0) == 0:
-            logger.warning(f"No employees found for timesheet: Year={year}, Month={month}, Dept={dept_id}")
+            logger.warning(f"No employees found for timesheet: Year={year}, Month={month}, Dept={dept_id}, Housing={housing_id}")
     except Exception as e:
         logger.error(f"Error generating timesheet: {str(e)}")
         flash(f"Error generating timesheet: {str(e)}", "danger")
@@ -144,9 +187,12 @@ def timesheet():
     return render_template('timesheet.html', 
                           timesheet_data=timesheet_data,
                           departments=departments,
+                          housings=housings,  # جديد: إرسال قائمة المساكن إلى القالب
                           selected_year=year,
                           selected_month=month,
-                          selected_dept=dept_id)
+                          selected_dept=dept_id,
+                          selected_housing=housing_id,  # جديد: معرف السكن المحدد
+                          month_dates=month_dates)
 
 @app.route('/departments')
 def departments():
@@ -175,7 +221,345 @@ def settings():
         app.logger.error(f"Error getting sync log: {str(e)}")
         last_sync = None
     
-    return render_template('settings.html', sync_settings=sync_settings, last_sync=last_sync)
+    # Get housings and biometric terminals for settings page
+    try:
+        housings = Housing.query.all()
+        terminals = BiometricTerminal.query.all()
+    except Exception as e:
+        app.logger.error(f"Error fetching housings and terminals: {str(e)}")
+        housings = []
+        terminals = []
+    
+    # Check if mock mode is enabled
+    mock_mode_enabled = os.environ.get("MOCK_MODE", "false").lower() == "true" or sync_service.MOCK_MODE_ENABLED
+    
+    return render_template('settings.html', 
+                          sync_settings=sync_settings, 
+                          last_sync=last_sync,
+                          housings=housings,
+                          terminals=terminals,
+                          mock_mode_enabled=mock_mode_enabled)
+
+@app.route('/trigger_sync', methods=['GET', 'POST'])
+def trigger_sync():
+    """Trigger a manual data synchronization with the biometric system"""
+    try:
+        # Get start and end dates from request parameters
+        start_date = request.args.get('start_date') or request.form.get('start_date')
+        end_date = request.args.get('end_date') or request.form.get('end_date')
+        
+        # Store selected dates in environment variables for sync service
+        if start_date:
+            os.environ['SYNC_START_DATE'] = start_date
+            sync_service.SYNC_START_DATE = start_date
+            logger.info(f"Using specified start date for sync: {start_date}")
+            
+        if end_date:
+            os.environ['SYNC_END_DATE'] = end_date
+            sync_service.SYNC_END_DATE = end_date
+            logger.info(f"Using specified end date for sync: {end_date}")
+        
+        # Check if mock mode is requested (can be enabled via query parameter or form data)
+        use_mock = request.args.get('mock') == 'true' or request.form.get('mock') == 'true'
+        
+        if use_mock:
+            # Enable mock mode only if specifically requested
+            os.environ['MOCK_MODE'] = "true"
+            sync_service.MOCK_MODE_ENABLED = True
+            logger.info("Mock mode enabled for sync at user request")
+        else:
+            # Disable mock mode to use the real API
+            os.environ['MOCK_MODE'] = "false"
+            sync_service.MOCK_MODE_ENABLED = False
+            logger.info("Using real BioTime API for synchronization")
+            
+        # Use the start_sync_in_background function if available
+        if hasattr(sync_service, 'start_sync_in_background'):
+            # Modified method that doesn't rely on request context
+            result = sync_service.start_sync_in_background(app=app)
+            
+            if result:
+                flash('Data synchronization started successfully', 'success')
+            else:
+                flash('Failed to start synchronization - another sync may be running', 'warning')
+        else:
+            # Fall back to direct sync, passing dates explicitly
+            thread = threading.Thread(
+                target=sync_service.simple_sync_data,
+                kwargs={
+                    'app': app,
+                    'request_start_date': start_date,
+                    'request_end_date': end_date
+                }
+            )
+            thread.daemon = True
+            thread.start()
+            flash('Data synchronization started successfully', 'success')
+            
+    except Exception as e:
+        logger.error(f"Error triggering sync: {str(e)}")
+        flash(f'Error triggering sync: {str(e)}', 'danger')
+    
+    # Redirect back to the previous page or settings
+    next_page = request.args.get('next') or request.referrer or url_for('settings')
+    return redirect(next_page)
+
+@app.route('/add_housing', methods=['POST'])
+def add_housing():
+    """Add a new housing"""
+    try:
+        housing_name = request.form.get('housing_name')
+        housing_location = request.form.get('housing_location', '')
+        housing_description = request.form.get('housing_description', '')
+        
+        if not housing_name:
+            flash('اسم السكن مطلوب', 'danger')
+            return redirect(url_for('settings'))
+        
+        new_housing = Housing(
+            name=housing_name,
+            location=housing_location,
+            description=housing_description
+        )
+        
+        db.session.add(new_housing)
+        db.session.commit()
+        
+        flash('تمت إضافة السكن بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error adding housing: {str(e)}")
+        flash(f'حدث خطأ أثناء إضافة السكن: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/edit_housing', methods=['POST'])
+def edit_housing():
+    """Edit existing housing"""
+    try:
+        housing_id = request.form.get('housing_id')
+        housing_name = request.form.get('housing_name')
+        housing_location = request.form.get('housing_location', '')
+        housing_description = request.form.get('housing_description', '')
+        
+        if not housing_id or not housing_name:
+            flash('معرف واسم السكن مطلوبان', 'danger')
+            return redirect(url_for('settings'))
+        
+        housing = Housing.query.get(housing_id)
+        if not housing:
+            flash('لم يتم العثور على السكن', 'danger')
+            return redirect(url_for('settings'))
+        
+        housing.name = housing_name
+        housing.location = housing_location
+        housing.description = housing_description
+        
+        db.session.commit()
+        
+        flash('تم تحديث السكن بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating housing: {str(e)}")
+        flash(f'حدث خطأ أثناء تحديث السكن: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/delete_housing', methods=['POST'])
+def delete_housing():
+    """Delete housing"""
+    try:
+        housing_id = request.form.get('housing_id')
+        
+        if not housing_id:
+            flash('معرف السكن مطلوب', 'danger')
+            return redirect(url_for('settings'))
+        
+        housing = Housing.query.get(housing_id)
+        if not housing:
+            flash('لم يتم العثور على السكن', 'danger')
+            return redirect(url_for('settings'))
+        
+        # Check if there are terminals associated with this housing
+        if housing.terminals:
+            # Update terminals to remove housing association
+            for terminal in housing.terminals:
+                terminal.housing_id = None
+        
+        db.session.delete(housing)
+        db.session.commit()
+        
+        flash('تم حذف السكن بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting housing: {str(e)}")
+        flash(f'حدث خطأ أثناء حذف السكن: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/add_terminal', methods=['POST'])
+def add_terminal():
+    """Add a new biometric terminal"""
+    try:
+        terminal_alias = request.form.get('terminal_alias')
+        device_id = request.form.get('device_id')
+        terminal_location = request.form.get('terminal_location', '')
+        housing_id = request.form.get('housing_id') or None
+        
+        if not terminal_alias or not device_id:
+            flash('اسم ومعرف الجهاز مطلوبان', 'danger')
+            return redirect(url_for('settings'))
+        
+        # Check if terminal with this alias already exists
+        existing_terminal = BiometricTerminal.query.filter_by(terminal_alias=terminal_alias).first()
+        if existing_terminal:
+            flash('يوجد جهاز بصمة بنفس الاسم بالفعل', 'danger')
+            return redirect(url_for('settings'))
+        
+        new_terminal = BiometricTerminal(
+            terminal_alias=terminal_alias,
+            device_id=device_id,
+            location=terminal_location,
+            housing_id=housing_id
+        )
+        
+        db.session.add(new_terminal)
+        db.session.commit()
+        
+        flash('تمت إضافة جهاز البصمة بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error adding terminal: {str(e)}")
+        flash(f'حدث خطأ أثناء إضافة جهاز البصمة: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/edit_terminal', methods=['POST'])
+def edit_terminal():
+    """Edit existing biometric terminal"""
+    try:
+        terminal_id = request.form.get('terminal_id')
+        terminal_alias = request.form.get('terminal_alias')
+        device_id = request.form.get('device_id')
+        terminal_location = request.form.get('terminal_location', '')
+        housing_id = request.form.get('housing_id') or None
+        
+        if not terminal_id or not terminal_alias or not device_id:
+            flash('معرف واسم الجهاز مطلوبان', 'danger')
+            return redirect(url_for('settings'))
+        
+        terminal = BiometricTerminal.query.get(terminal_id)
+        if not terminal:
+            flash('لم يتم العثور على جهاز البصمة', 'danger')
+            return redirect(url_for('settings'))
+        
+        # Check if another terminal with this alias exists
+        existing_terminal = BiometricTerminal.query.filter_by(terminal_alias=terminal_alias).first()
+        if existing_terminal and str(existing_terminal.id) != str(terminal_id):
+            flash('يوجد جهاز بصمة آخر بنفس الاسم', 'danger')
+            return redirect(url_for('settings'))
+        
+        terminal.terminal_alias = terminal_alias
+        terminal.device_id = device_id
+        terminal.location = terminal_location
+        terminal.housing_id = housing_id
+        
+        db.session.commit()
+        
+        flash('تم تحديث جهاز البصمة بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating terminal: {str(e)}")
+        flash(f'حدث خطأ أثناء تحديث جهاز البصمة: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/delete_terminal', methods=['POST'])
+def delete_terminal():
+    """Delete biometric terminal"""
+    try:
+        terminal_id = request.form.get('terminal_id')
+        
+        if not terminal_id:
+            flash('معرف الجهاز مطلوب', 'danger')
+            return redirect(url_for('settings'))
+        
+        terminal = BiometricTerminal.query.get(terminal_id)
+        if not terminal:
+            flash('لم يتم العثور على جهاز البصمة', 'danger')
+            return redirect(url_for('settings'))
+        
+        db.session.delete(terminal)
+        db.session.commit()
+        
+        flash('تم حذف جهاز البصمة بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting terminal: {str(e)}")
+        flash(f'حدث خطأ أثناء حذف جهاز البصمة: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/remove_terminal_housing', methods=['POST'])
+def remove_terminal_housing():
+    """Remove housing association from terminal"""
+    try:
+        terminal_id = request.form.get('terminal_id')
+        
+        if not terminal_id:
+            flash('معرف الجهاز مطلوب', 'danger')
+            return redirect(url_for('settings'))
+        
+        terminal = BiometricTerminal.query.get(terminal_id)
+        if not terminal:
+            flash('لم يتم العثور على جهاز البصمة', 'danger')
+            return redirect(url_for('settings'))
+        
+        terminal.housing_id = None
+        db.session.commit()
+        
+        flash('تم إزالة ارتباط السكن بجهاز البصمة بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error removing terminal housing: {str(e)}")
+        flash(f'حدث خطأ أثناء إزالة ارتباط السكن بجهاز البصمة: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
+@app.route('/get_housing_terminals')
+def get_housing_terminals():
+    """Get terminals for a specific housing (AJAX)"""
+    try:
+        housing_id = request.args.get('housing_id')
+        
+        if not housing_id:
+            return jsonify({
+                'success': False,
+                'error': 'معرف السكن مطلوب'
+            }), 400
+        
+        terminals = BiometricTerminal.query.filter_by(housing_id=housing_id).all()
+        terminal_list = []
+        
+        for terminal in terminals:
+            terminal_list.append({
+                'id': terminal.id,
+                'terminal_alias': terminal.terminal_alias,
+                'device_id': terminal.device_id,
+                'location': terminal.location,
+                'housing_id': terminal.housing_id
+            })
+        
+        return jsonify({
+            'success': True,
+            'terminals': terminal_list
+        })
+    except Exception as e:
+        logger.error(f"Error fetching housing terminals: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/save_settings', methods=['POST'])
 def save_settings():
@@ -292,241 +676,7 @@ def save_settings():
     
     return redirect(url_for('settings'))
 
-@app.route('/upload_sync', methods=['POST'])
-def upload_sync():
-    """Handle file upload for manual sync"""
-    temp_path = None
-    try:
-        # Check if file was uploaded
-        if 'sync_file' not in request.files:
-            flash('No file selected', 'danger')
-            return redirect(url_for('settings'))
-            
-        file = request.files['sync_file']
-        
-        # Check if file was selected
-        if file.filename == '':
-            flash('No file selected', 'danger')
-            return redirect(url_for('settings'))
-            
-        # Accept more file extensions (.txt, .csv, .tsv)
-        allowed_extensions = ['.txt', '.csv', '.tsv']
-        file_ext = os.path.splitext(file.filename)[1].lower()
-        if file_ext not in allowed_extensions:
-            flash(f'Only {", ".join(allowed_extensions)} files are allowed', 'danger')
-            return redirect(url_for('settings'))
-            
-        # Generate unique filename to avoid conflicts
-        import uuid
-        temp_filename = f'temp_sync_file_{uuid.uuid4().hex}{file_ext}'
-        temp_path = os.path.join(os.getcwd(), temp_filename)
-        
-        # Save the file temporarily
-        file.save(temp_path)
-        logger.info(f"Saved uploaded file to {temp_path}")
-        
-        # Process file with sync service
-        records = 0
-        try:
-            # Use a separate try-except block for processing to handle database errors
-            with app.app_context():
-                records = sync_service.process_uploaded_file(temp_path)
-                
-            if records > 0:
-                flash(f'Successfully processed {records} records from uploaded file', 'success')
-            else:
-                flash('No records were processed from the uploaded file. Please check file format.', 'warning')
-                
-        except Exception as proc_e:
-            logger.error(f"Error in file processing: {str(proc_e)}")
-            flash(f'Error processing file data: {str(proc_e)}', 'danger')
-            
-    except Exception as e:
-        logger.error(f"Error handling uploaded file: {str(e)}")
-        flash(f"Error uploading file: {str(e)}", 'danger')
-        
-    finally:
-        # Ensure temporary file is removed
-        try:
-            if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
-                logger.info(f"Removed temporary file {temp_path}")
-        except Exception as cleanup_e:
-            logger.error(f"Error removing temporary file: {str(cleanup_e)}")
-        
-    return redirect(url_for('settings'))
-
-@app.route('/trigger_sync', methods=['POST'])
-def trigger_sync():
-    """Trigger a manual sync with BioTime"""
-    try:
-        # الحصول على تواريخ المزامنة من النموذج إذا تم تقديمها
-        if 'start_date' in request.form and request.form.get('start_date', '').strip():
-            start_date = request.form.get('start_date').strip()
-            os.environ['SYNC_START_DATE'] = start_date
-            sync_service.SYNC_START_DATE = start_date
-            logger.info(f"تم تعيين تاريخ بداية المزامنة: {start_date}")
-            
-        if 'end_date' in request.form and request.form.get('end_date', '').strip():
-            end_date = request.form.get('end_date').strip()
-            os.environ['SYNC_END_DATE'] = end_date
-            sync_service.SYNC_END_DATE = end_date
-            logger.info(f"تم تعيين تاريخ نهاية المزامنة: {end_date}")
-        
-        # استخدام الوظيفة الجديدة للمزامنة في الخلفية
-        if sync_service.start_sync_in_background(app=app):
-            flash('تم بدء عملية المزامنة بنجاح.', 'info')
-        else:
-            flash('هناك عملية مزامنة جارية بالفعل.', 'warning')
-    except Exception as e:
-        logger.error(f"خطأ في بدء المزامنة: {str(e)}")
-        flash(f"خطأ في بدء المزامنة: {str(e)}", 'danger')
-    
-    return redirect(url_for('settings'))
-
-@app.route('/cancel_sync', methods=['POST'])
-def cancel_sync():
-    """إلغاء عملية المزامنة الجارية"""
-    global SYNC_CANCELLATION_FLAG
-    
-    try:
-        # تعيين علم الإلغاء إلى True
-        SYNC_CANCELLATION_FLAG = True
-        
-        # البحث عن أحدث عملية مزامنة جارية
-        last_sync = SyncLog.query.filter_by(status="in_progress").order_by(SyncLog.sync_time.desc()).first()
-        
-        # إذا وجدت عملية مزامنة جارية، قم بتحديث حالتها
-        if last_sync:
-            last_sync.status = "cancelled"
-            last_sync.error_message = "تم إلغاء المزامنة بواسطة المستخدم"
-            last_sync.end_time = datetime.utcnow()
-            db.session.commit()
-            
-            flash("تم إلغاء عملية المزامنة بنجاح", "info")
-        else:
-            flash("لم يتم العثور على عملية مزامنة جارية", "warning")
-            
-    except Exception as e:
-        logger.error(f"خطأ أثناء محاولة إلغاء المزامنة: {str(e)}")
-        flash(f"حدث خطأ أثناء محاولة إلغاء المزامنة: {str(e)}", "danger")
-    
-    return redirect(url_for('settings'))
-
-@app.route('/sync_results')
-def sync_results():
-    """Display sync results and attendance data"""
-    try:
-        # Get filter parameters
-        department = request.args.get('department')
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        employee = request.args.get('employee')
-        page = int(request.args.get('page', 1))
-        per_page = 50  # Number of records per page
-        
-        # Get departments for filter dropdown
-        departments = Department.query.all()
-        
-        # Build query for attendance records
-        query = db.session.query(
-            AttendanceRecord,
-            Employee.name.label('employee_name'),
-            Department.name.label('department_name')
-        ).join(
-            Employee, AttendanceRecord.employee_id == Employee.id
-        ).join(
-            Department, Employee.department_id == Department.id
-        )
-        
-        # Apply filters
-        if department:
-            query = query.filter(Employee.department_id == department)
-            
-        if start_date:
-            query = query.filter(AttendanceRecord.date >= start_date)
-            
-        if end_date:
-            query = query.filter(AttendanceRecord.date <= end_date)
-            
-        if employee:
-            query = query.filter(Employee.name.ilike(f'%{employee}%'))
-            
-        # Order by date (newest first)
-        query = query.order_by(AttendanceRecord.date.desc())
-        
-        # Count total records for pagination
-        total_records = query.count()
-        total_pages = (total_records + per_page - 1) // per_page
-        
-        # Paginate results
-        records = query.offset((page - 1) * per_page).limit(per_page).all()
-        
-        # Format records for display
-        attendance_records = []
-        for record, emp_name, dept_name in records:
-            # Get day of week in Arabic
-            weekday = data_processor.get_day_name(record.date.weekday())
-            
-            attendance_records.append({
-                'employee_name': emp_name,
-                'department_name': dept_name,
-                'date': record.date.strftime('%Y-%m-%d'),
-                'weekday': weekday,
-                'clock_in': record.clock_in.strftime('%H:%M') if record.clock_in else None,
-                'clock_out': record.clock_out.strftime('%H:%M') if record.clock_out else None,
-                'terminal_alias_in': record.terminal_alias_in,
-                'terminal_alias_out': record.terminal_alias_out,
-                'total_time': record.total_time,
-                'attendance_status': record.attendance_status
-            })
-            
-        # Get last sync info
-        last_sync = SyncLog.query.order_by(SyncLog.sync_time.desc()).first()
-        
-        # Prepare sync data summary
-        earliest_record = db.session.query(func.min(AttendanceRecord.date)).scalar()
-        latest_record = db.session.query(func.max(AttendanceRecord.date)).scalar()
-        records_count = AttendanceRecord.query.count()
-        
-        sync_data = {
-            'records_count': records_count,
-            'start_date': earliest_record.strftime('%Y-%m-%d') if earliest_record else 'N/A',
-            'end_date': latest_record.strftime('%Y-%m-%d') if latest_record else 'N/A',
-            'last_sync': last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') if last_sync else 'Never'
-        }
-        
-        # Pagination data
-        pagination = {
-            'current_page': page,
-            'total_pages': total_pages,
-            'per_page': per_page,
-            'total_records': total_records
-        } if total_pages > 1 else None
-        
-        # Filter data for reuse in pagination links
-        filter_data = {
-            'department': department,
-            'start_date': start_date,
-            'end_date': end_date,
-            'employee': employee
-        }
-        
-        return render_template('sync_results.html',
-                              sync_data=sync_data,
-                              attendance_records=attendance_records,
-                              departments=departments,
-                              selected_dept=department,
-                              filter_data=filter_data,
-                              pagination=pagination)
-    
-    except Exception as e:
-        logger.error(f"Error displaying sync results: {str(e)}")
-        flash(f"Error displaying results: {str(e)}", "danger")
-        return redirect(url_for('settings'))
-
-# AI Analytics Routes
-@app.route('/ai')
+@app.route('/ai_dashboard')
 def ai_dashboard():
     """AI Analytics Dashboard"""
     # Get departments for filter dropdown
@@ -565,7 +715,7 @@ def ai_dashboard():
                           recommendations=recommendations,
                           dept_stats=dept_stats)
 
-@app.route('/ai/anomalies')
+@app.route('/ai_anomalies')
 def ai_anomalies():
     """Detect and display attendance anomalies"""
     try:
@@ -628,7 +778,7 @@ def ai_anomalies():
         flash(f"Error detecting anomalies: {str(e)}", "danger")
         return redirect(url_for('ai_dashboard'))
 
-@app.route('/ai/predictions')
+@app.route('/ai_predictions')
 def ai_predictions():
     """Generate and display attendance predictions"""
     try:
@@ -658,7 +808,7 @@ def ai_predictions():
         flash(f"Error generating predictions: {str(e)}", "danger")
         return redirect(url_for('ai_dashboard'))
 
-@app.route('/ai/patterns')
+@app.route('/ai_patterns')
 def ai_patterns():
     """Identify and display attendance patterns"""
     try:
@@ -699,7 +849,7 @@ def ai_patterns():
         flash(f"Error analyzing patterns: {str(e)}", "danger")
         return redirect(url_for('ai_dashboard'))
 
-@app.route('/ai/clustering')
+@app.route('/ai_clustering')
 def ai_clustering():
     """Cluster employees based on attendance patterns"""
     try:
@@ -729,7 +879,7 @@ def ai_clustering():
         flash(f"Error clustering employees: {str(e)}", "danger")
         return redirect(url_for('ai_dashboard'))
 
-@app.route('/ai/recommendations')
+@app.route('/ai_recommendations')
 def ai_recommendations():
     """Display AI-generated optimization recommendations"""
     try:
@@ -780,173 +930,211 @@ def api_ai_chart():
         logger.error(f"Error generating chart: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/cancel_sync', methods=['GET', 'POST'])
+def cancel_sync():
+    """Cancel any ongoing data synchronization process"""
+    try:
+        # Add logic here to cancel any ongoing sync process
+        # This might involve setting a flag or stopping a background process
+        if hasattr(sync_service, 'cancel_sync'):
+            sync_service.cancel_sync()
+            flash('Sync operation has been cancelled', 'info')
+        else:
+            logger.warning("Cancel sync functionality not fully implemented")
+            flash('Cancel sync functionality not fully implemented', 'warning')
+    except Exception as e:
+        logger.error(f"Error cancelling sync: {str(e)}")
+        flash(f"Error cancelling sync: {str(e)}", 'danger')
+    
+    # Redirect back to the previous page or settings
+    next_page = request.args.get('next') or request.referrer or url_for('settings')
+    return redirect(next_page)
+
 @app.route('/check_sync_status')
 def check_sync_status():
-    """API endpoint to check the current sync status for real-time updates"""
+    """AJAX endpoint to check current sync status"""
     try:
-        # استخدام النظام الجديد لتتبع حالة المزامنة
-        sync_status = sync_service.get_sync_status()
+        # Get the current sync status
+        if hasattr(sync_service, 'get_sync_status'):
+            status = sync_service.get_sync_status()
+        else:
+            status = {"status": "unknown", "message": "Sync status function not available"}
         
-        # إذا كانت المزامنة غير نشطة، نتحقق من آخر سجل مزامنة
-        if sync_status["status"] == "none":
-            last_sync = SyncLog.query.order_by(SyncLog.sync_time.desc()).first()
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Error getting sync status: {str(e)}")
+        return jsonify({
+            "status": "error", 
+            "message": f"Error getting sync status: {str(e)}"
+        }), 500
+
+@app.route('/sync_results')
+def sync_results():
+    """Display detailed sync results and history"""
+    try:
+        # Get sync logs for history
+        sync_logs = SyncLog.query.order_by(SyncLog.sync_time.desc()).limit(20).all()
+        
+        # Get current sync status
+        if hasattr(sync_service, 'get_sync_status'):
+            current_status = sync_service.get_sync_status()
+        else:
+            current_status = {"status": "unknown", "message": "Sync status function not available"}
+        
+        return render_template('sync_results.html',
+                              sync_logs=sync_logs,
+                              current_status=current_status)
+    except Exception as e:
+        logger.error(f"Error displaying sync results: {str(e)}")
+        flash(f"Error displaying sync results: {str(e)}", "danger")
+        return redirect(url_for('settings'))
+
+@app.route('/upload_sync', methods=['POST'])
+def upload_sync():
+    """Handle file upload for manual sync from file"""
+    import os
+    try:
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            flash('No file part', 'danger')
+            return redirect(url_for('settings'))
             
-            if last_sync:
-                return jsonify({
-                    'status': last_sync.status,
-                    'message': f'آخر مزامنة: {last_sync.sync_time.strftime("%Y-%m-%d %H:%M:%S")}',
-                    'records': last_sync.records_synced,
-                    'sync_time': last_sync.sync_time.isoformat(),
-                    'error': last_sync.error_message
-                })
+        file = request.files['file']
+        
+        # If user does not select file, browser also
+        # submit an empty part without filename
+        if file.filename == '':
+            flash('No selected file', 'danger')
+            return redirect(url_for('settings'))
+            
+        if file:
+            # Save the file
+            upload_path = 'attendance_data_upload.txt'
+            file.save(upload_path)
+            
+            # Process the file (you can call your sync code here)
+            flash('File uploaded successfully. Processing data...', 'info')
+            
+            # Start processing in background
+            if hasattr(sync_service, 'process_uploaded_file'):
+                thread = threading.Thread(
+                    target=sync_service.process_uploaded_file,
+                    kwargs={'app': app, 'filepath': upload_path}
+                )
+                thread.daemon = True
+                thread.start()
             else:
-                return jsonify({
-                    'status': 'none',
-                    'message': 'لم يتم العثور على أي سجل مزامنة'
-                })
-        
-        # إذا كانت المزامنة نشطة (in_progress)
-        if sync_status["status"] == "in_progress":
-            return jsonify({
-                'status': 'in_progress',
-                'message': 'المزامنة جارية...',
-                'step': sync_status["step"],
-                'progress': sync_status["progress"],
-                'progress_message': sync_status["message"],
-                'can_cancel': True
-            })
-        
-        # حالات المزامنة الأخرى (success, error, cancelled)
-        return jsonify({
-            'status': sync_status["status"],
-            'message': sync_status["message"],
-            'records': sync_status["records"],
-            'error': sync_status["error"]
-        })
-    
+                flash('File upload feature not fully implemented', 'warning')
+            
     except Exception as e:
-        logger.error(f"خطأ في التحقق من حالة المزامنة: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'حدث خطأ أثناء التحقق من حالة المزامنة',
-            'error': str(e)
-        })
+        logger.error(f"Error processing uploaded file: {str(e)}")
+        flash(f'Error processing uploaded file: {str(e)}', 'danger')
+        
+    return redirect(url_for('settings'))
 
-@app.route('/api/employees/department/<int:dept_id>')
-def api_get_employees_by_department(dept_id):
-    """API endpoint to fetch employees by department"""
+@app.route('/employee_performance')
+def employee_performance():
+    """View employee performance metrics and analytics"""
     try:
-        employees = Employee.query.filter_by(department_id=dept_id).all()
-        employee_list = []
+        # Get query parameters
+        emp_id = request.args.get('employee_id')
+        dept_id = request.args.get('department_id')
+        period = request.args.get('period', 'month')  # Default to monthly view
         
-        for employee in employees:
-            employee_list.append({
-                'id': employee.id,
-                'emp_code': employee.emp_code,
-                'name': employee.name,
-                'profession': employee.profession or '',
-                'daily_hours': employee.daily_hours,
-                'active': employee.active
-            })
+        # Get departments for filter dropdown
+        departments = Department.query.all()
         
-        return jsonify({
-            'success': True,
-            'employees': employee_list
-        })
-    
-    except Exception as e:
-        logger.error(f"Error fetching employees: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/employees/<int:employee_id>', methods=['GET'])
-def api_get_employee(employee_id):
-    """API endpoint to get a single employee's details"""
-    try:
-        employee = Employee.query.get(employee_id)
+        # Default to all employees if no filters
+        employees = []
+        selected_employee = None
         
-        if not employee:
-            return jsonify({
-                'success': False,
-                'error': 'Employee not found'
-            }), 404
+        if dept_id:
+            # Filter employees by department
+            employees = Employee.query.filter_by(department_id=dept_id).all()
         
-        return jsonify({
-            'success': True,
-            'employee': {
-                'id': employee.id,
-                'emp_code': employee.emp_code,
-                'name': employee.name,
-                'profession': employee.profession or '',
-                'daily_hours': employee.daily_hours,
-                'active': employee.active,
-                'department_id': employee.department_id
+        if emp_id:
+            # Get specific employee details
+            selected_employee = Employee.query.get(emp_id)
+            
+            if not selected_employee:
+                flash("Employee not found", "warning")
+                return redirect(url_for('departments'))
+        
+        # Get performance metrics
+        performance_data = {}
+        attendance_history = []
+        
+        if selected_employee:
+            # Get attendance records for the employee
+            if period == 'month':
+                # Last 30 days
+                end_date = datetime.now().date()
+                start_date = end_date - timedelta(days=30)
+            elif period == 'quarter':
+                # Last 90 days
+                end_date = datetime.now().date()
+                start_date = end_date - timedelta(days=90)
+            elif period == 'year':
+                # Last 365 days
+                end_date = datetime.now().date()
+                start_date = end_date - timedelta(days=365)
+            else:
+                # Default to last 30 days
+                end_date = datetime.now().date()
+                start_date = end_date - timedelta(days=30)
+            
+            # Query attendance records
+            attendance_history = AttendanceRecord.query.filter(
+                AttendanceRecord.employee_id == selected_employee.id,
+                AttendanceRecord.date >= start_date,
+                AttendanceRecord.date <= end_date
+            ).order_by(AttendanceRecord.date).all()
+            
+            # Calculate performance metrics
+            total_days = (end_date - start_date).days + 1
+            present_days = sum(1 for record in attendance_history if record.attendance_status == 'P')
+            absent_days = sum(1 for record in attendance_history if record.attendance_status == 'A')
+            vacation_days = sum(1 for record in attendance_history if record.attendance_status == 'V')
+            sick_days = sum(1 for record in attendance_history if record.attendance_status == 'S')
+            
+            # Calculate other metrics
+            attendance_rate = round((present_days / total_days) * 100, 1) if total_days > 0 else 0
+            total_hours = sum(record.work_hours or 0 for record in attendance_history)
+            overtime_hours = sum(record.overtime_hours or 0 for record in attendance_history)
+            
+            # Assemble performance data
+            performance_data = {
+                'employee': selected_employee,
+                'attendance_rate': attendance_rate,
+                'present_days': present_days,
+                'absent_days': absent_days,
+                'vacation_days': vacation_days,
+                'sick_days': sick_days,
+                'total_days': total_days,
+                'total_hours': round(total_hours, 1),
+                'overtime_hours': round(overtime_hours, 1),
+                'period': period,
+                'start_date': start_date,
+                'end_date': end_date
             }
-        })
-    
+            
+        return render_template('employee_performance.html',
+                              departments=departments,
+                              employees=employees,
+                              selected_dept=dept_id,
+                              performance_data=performance_data,
+                              attendance_history=attendance_history,
+                              period=period)
+                              
     except Exception as e:
-        logger.error(f"Error fetching employee: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in employee performance page: {str(e)}")
+        flash(f"Error loading employee performance data: {str(e)}", "danger")
+        return redirect(url_for('index'))
 
-@app.route('/api/employees/<int:employee_id>', methods=['PUT'])
-def api_update_employee(employee_id):
-    """API endpoint to update an employee's details"""
-    try:
-        employee = Employee.query.get(employee_id)
-        
-        if not employee:
-            return jsonify({
-                'success': False,
-                'error': 'Employee not found'
-            }), 404
-        
-        # Get JSON data from request
-        data = request.json
-        
-        # Update employee fields
-        if 'name' in data:
-            employee.name = data['name']
-        
-        if 'profession' in data:
-            employee.profession = data['profession']
-        
-        if 'daily_hours' in data:
-            try:
-                employee.daily_hours = float(data['daily_hours'])
-            except ValueError:
-                return jsonify({
-                    'success': False,
-                    'error': 'Daily hours must be a valid number'
-                }), 400
-        
-        if 'active' in data:
-            employee.active = data['active']
-        
-        # Save changes
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Employee updated successfully'
-        })
-    
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error updating employee: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-# Setup scheduled task for data synchronization
-def initialize_scheduler():
+# Initialize scheduler when app is ready
+with app.app_context():
     scheduler.add_job(
-        sync_service.simple_sync_data,  # Usar la función simple_sync_data en lugar de sync_data
+        sync_service.simple_sync_data,
         'interval', 
         hours=4, 
         id='biotime_sync',
@@ -954,14 +1142,6 @@ def initialize_scheduler():
     )
     scheduler.start()
     logger.info("Scheduler started - BioTime sync job scheduled every 4 hours")
-
-# Start the scheduler with the app context
-def start_scheduler():
-    initialize_scheduler()
-
-# Initialize scheduler when app is ready
-with app.app_context():
-    start_scheduler()
 
 # Shutdown scheduler when app exits
 import atexit

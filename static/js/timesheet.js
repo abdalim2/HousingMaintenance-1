@@ -32,6 +32,109 @@ document.addEventListener('DOMContentLoaded', function() {
         alert(`Attendance details for employee ${employeeId} on ${date} would be shown in a modal`);
     }
     
+    // Get configured month dates from settings - check both server-provided data and localStorage
+    function getMonthDateConfig(month) {
+        // First check if the server provided month_dates in the window object
+        if (window.monthDatesConfig && month in window.monthDatesConfig) {
+            return {
+                start: window.monthDatesConfig[month].start,
+                end: window.monthDatesConfig[month].end
+            };
+        }
+        
+        // Fall back to localStorage if server data is not available
+        const savedMonthDates = localStorage.getItem('month_dates_config');
+        if (!savedMonthDates) return null;
+        
+        try {
+            const monthDates = JSON.parse(savedMonthDates);
+            if (month in monthDates) {
+                return {
+                    start: monthDates[month].start,
+                    end: monthDates[month].end
+                };
+            }
+        } catch (error) {
+            console.error('Error parsing saved month dates:', error);
+        }
+        
+        return null;
+    }
+    
+    // Initialize timesheet filter form with configured dates
+    const form = document.getElementById('timesheet-filter-form');
+    if (form) {
+        const monthSelect = document.getElementById('month-select');
+        if (monthSelect) {
+            monthSelect.addEventListener('change', function() {
+                const selectedMonth = this.value;
+                const monthConfig = getMonthDateConfig(selectedMonth);
+                
+                // Update hidden fields with configured dates if available
+                if (monthConfig && monthConfig.start && monthConfig.end) {
+                    console.log(`Found config for month ${selectedMonth}:`, monthConfig);
+                    
+                    const hiddenStartInput = document.getElementById('config-start-date') || document.createElement('input');
+                    hiddenStartInput.type = 'hidden';
+                    hiddenStartInput.id = 'config-start-date';
+                    hiddenStartInput.name = 'start_date';
+                    hiddenStartInput.value = monthConfig.start;
+                    
+                    const hiddenEndInput = document.getElementById('config-end-date') || document.createElement('input');
+                    hiddenEndInput.type = 'hidden';
+                    hiddenEndInput.id = 'config-end-date';
+                    hiddenEndInput.name = 'end_date';
+                    hiddenEndInput.value = monthConfig.end;
+                    
+                    if (!document.getElementById('config-start-date')) {
+                        form.appendChild(hiddenStartInput);
+                    }
+                    if (!document.getElementById('config-end-date')) {
+                        form.appendChild(hiddenEndInput);
+                    }
+                } else {
+                    console.log(`No config found for month ${selectedMonth}`);
+                    // Remove config inputs if not available
+                    const startInput = document.getElementById('config-start-date');
+                    const endInput = document.getElementById('config-end-date');
+                    if (startInput) startInput.remove();
+                    if (endInput) endInput.remove();
+                }
+            });
+            
+            // Trigger change event on load to set initial values
+            monthSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Handle form submission
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const year = document.getElementById('year-select').value;
+            const month = document.getElementById('month-select').value;
+            const department = document.getElementById('department-select').value;
+            
+            let url = `${form.getAttribute('data-action') || '{{ url_for("timesheet") }}'}?year=${year}&month=${month}`;
+            
+            // Add configured dates if available
+            const configStart = document.getElementById('config-start-date');
+            const configEnd = document.getElementById('config-end-date');
+            
+            if (configStart && configStart.value) {
+                url += `&start_date=${configStart.value}`;
+            }
+            if (configEnd && configEnd.value) {
+                url += `&end_date=${configEnd.value}`;
+            }
+            
+            if (department) {
+                url += `&department=${department}`;
+            }
+            
+            console.log('Navigating to:', url);
+            window.location.href = url;
+        });
+    }
+    
     // Handle export to various formats
     document.getElementById('export-pdf')?.addEventListener('click', function() {
         prepareForPrint();
