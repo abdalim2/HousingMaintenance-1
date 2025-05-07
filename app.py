@@ -1,6 +1,8 @@
 import os
 import logging
 import threading
+import sys
+import io
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session, g
 from werkzeug.middleware.proxy_fix import ProxyFix
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,14 +11,37 @@ from database import db, init_db
 from translations import get_text
 from sqlalchemy import func
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
+# Configure system encoding for Arabic text
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# Configure logging with proper encoding
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev_secret_key")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# Ensure Flask properly handles UTF-8
+app.config['JSON_AS_ASCII'] = False  # Allow JSON to contain non-ASCII characters
+
+# Add utility function for terminal output with Arabic support
+def log_with_arabic(message):
+    """Log messages with proper Arabic encoding"""
+    try:
+        logger.info(message)
+    except UnicodeEncodeError:
+        # Fallback if console doesn't support Unicode
+        safe_message = message.encode('utf-8', errors='replace').decode('utf-8')
+        logger.info(f"(Encoded message): {safe_message}")
 
 # Biotime API URLs - primary and backup
 BIOTIME_PRIMARY_API_URL = "http://172.16.16.13:8585/att/api/transactionReport/export/"
@@ -981,9 +1006,91 @@ def sync_results():
         else:
             current_status = {"status": "unknown", "message": "Sync status function not available"}
         
+        # Create sync_data dictionary for the template
+        last_sync = SyncLog.query.order_by(SyncLog.sync_time.desc()).first()
+        
+        # Query attendance records for pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = 50  # Number of records per page
+        
+        # Build filter query
+        query = db.session.query(
+            AttendanceRecord.id,
+            AttendanceRecord.date,
+            AttendanceRecord.clock_in,
+            AttendanceRecord.clock_out,
+            AttendanceRecord.attendance_status,
+            AttendanceRecord.terminal_id_in,
+            AttendanceRecord.terminal_id_out,
+            AttendanceRecord.work_hours.label('total_time'),
+            Employee.name.label('employee_name'),
+            Department.name.label('department_name'),
+            func.extract('dow', AttendanceRecord.date).label('weekday'),
+            BiometricTerminal.terminal_alias.label('terminal_alias_in')
+        ).select_from(AttendanceRecord).join(
+            Employee, AttendanceRecord.employee_id == Employee.id
+        ).join(
+            Department, Employee.department_id == Department.id
+        ).outerjoin(
+            BiometricTerminal, AttendanceRecord.terminal_id_in == BiometricTerminal.id
+        )
+        
+        # Apply filters if provided
+        dept_id = request.args.get('department')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        employee_search = request.args.get('employee')
+        
+        filter_data = {
+            'department': dept_id,
+            'start_date': start_date,
+            'end_date': end_date,
+            'employee': employee_search
+        }
+        
+        if dept_id:
+            query = query.filter(Employee.department_id == dept_id)
+        
+        if start_date:
+            query = query.filter(AttendanceRecord.date >= start_date)
+        
+        if end_date:
+            query = query.filter(AttendanceRecord.date <= end_date)
+            
+        if employee_search:
+            query = query.filter(Employee.name.like(f'%{employee_search}%'))
+        
+        # Count total records for statistics
+        records_count = query.count()
+        
+        # Paginate the results
+        pagination = query.order_by(AttendanceRecord.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        attendance_records = pagination.items
+        
+        # Get min and max dates for display
+        min_date = db.session.query(func.min(AttendanceRecord.date)).scalar()
+        max_date = db.session.query(func.max(AttendanceRecord.date)).scalar()
+        
+        # Create sync_data dictionary
+        sync_data = {
+            'records_count': records_count,
+            'start_date': min_date.strftime('%Y-%m-%d') if min_date else 'N/A',
+            'end_date': max_date.strftime('%Y-%m-%d') if max_date else 'N/A',
+            'last_sync': last_sync.sync_time.strftime('%Y-%m-%d %H:%M:%S') if last_sync else 'N/A'
+        }
+        
+        # Get departments for filter dropdown
+        departments = Department.query.all()
+        
         return render_template('sync_results.html',
                               sync_logs=sync_logs,
-                              current_status=current_status)
+                              current_status=current_status,
+                              sync_data=sync_data,
+                              attendance_records=attendance_records,
+                              pagination=pagination,
+                              departments=departments,
+                              selected_dept=dept_id,
+                              filter_data=filter_data)
     except Exception as e:
         logger.error(f"Error displaying sync results: {str(e)}")
         flash(f"Error displaying sync results: {str(e)}", "danger")

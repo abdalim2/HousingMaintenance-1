@@ -116,25 +116,29 @@
                                         {% if day.status == 'P' %}
                                             {% if day.record %}
                                                 <div class="d-flex flex-column align-items-center">
-                                                    <!-- Horas regulares (máximo 8) -->
-                                                    {% if day.record.work_hours > 0 %}
+                                                    <!-- Regular hours (standardized to 8 max) -->
+                                                    {% if day.record.work_hours + day.record.overtime_hours > 0 %}
+                                                        {% set total_hours = day.record.work_hours + day.record.overtime_hours %}
+                                                        {% set regular_hours = 8 if total_hours > 8 else total_hours %}
+                                                        {% set overtime_hours = total_hours - regular_hours if total_hours > 8 else 0 %}
+
                                                         <span class="small text-success">
-                                                            {% if day.record.work_hours == day.record.work_hours|int %}
-                                                                {{ day.record.work_hours|int }}
+                                                            {% if regular_hours == regular_hours|int %}
+                                                                {{ regular_hours|int }}
                                                             {% else %}
-                                                                {{ day.record.work_hours|round(1) }}
+                                                                {{ regular_hours|round(1) }}
                                                             {% endif %}
                                                         </span>
-                                                    {% endif %}
-                                                    <!-- Horas extra (si hay) -->
-                                                    {% if day.record.overtime_hours > 0 %}
-                                                        <span class="small text-warning">
-                                                            {% if day.record.overtime_hours == day.record.overtime_hours|int %}
-                                                                {{ day.record.overtime_hours|int }}
-                                                            {% else %}
-                                                                {{ day.record.overtime_hours|round(1) }}
-                                                            {% endif %}
-                                                        </span>
+
+                                                        {% if overtime_hours > 0 %}
+                                                            <span class="small text-warning">
+                                                                {% if overtime_hours == overtime_hours|int %}
+                                                                    {{ overtime_hours|int }}
+                                                                {% else %}
+                                                                    {{ overtime_hours|round(1) }}
+                                                                {% endif %}
+                                                            </span>
+                                                        {% endif %}
                                                     {% endif %}
                                                 </div>
                                             {% else %}
@@ -232,7 +236,7 @@
 <script src="{{ url_for('static', filename='js/timesheet.js') }}"></script>
 <script>
     // Pass month configuration data from server to client
-    window.monthDatesConfig = {{ month_dates|tojson|safe }};
+    window.monthDatesConfig = {% if month_dates is defined %}{{ month_dates|tojson|safe }}{% else %}[]{% endif %};
     
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize tooltips
