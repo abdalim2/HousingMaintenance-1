@@ -187,6 +187,28 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
         
         employees = query.all()
         
+        # إنشاء قاموس لربط أجهزة البصمة بالسكن
+        terminal_to_housing = {}
+        housing_names = {}  # قاموس لتخزين أسماء السكنات حسب المعرف
+        
+        # جمع جميع أجهزة البصمة والسكنات المرتبطة بها
+        terminals = BiometricTerminal.query.all()
+        housings = Housing.query.all()
+        
+        # تخزين أسماء السكنات حسب المعرف
+        for housing in housings:
+            housing_names[housing.id] = housing.name
+        
+        # ربط أجهزة البصمة بالسكن
+        for terminal in terminals:
+            if terminal.housing_id:
+                terminal_to_housing[terminal.terminal_alias] = terminal.housing_id
+                # تخزين معرف السكن واسم السكن معاً
+                terminal_to_housing[f"{terminal.terminal_alias}_name"] = housing_names.get(terminal.housing_id, "Unknown Housing")
+            elif terminal.terminal_alias in terminal_to_housing:
+                # إذا كان الجهاز غير مرتبط بسكن محدد لكنه موجود في القاموس (للتوافق مع الإصدارات القديمة)
+                terminal_to_housing.pop(terminal.terminal_alias)
+        
         # Query all attendance records for these employees in the date range
         attendance_records = AttendanceRecord.query.filter(
             AttendanceRecord.employee_id.in_([e.id for e in employees]),
@@ -196,8 +218,18 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
         
         # Organize attendance records by employee and date
         attendance_by_employee = defaultdict(dict)
+        
+        # تتبع أجهزة البصمة المستخدمة لكل موظف
+        employee_terminals = defaultdict(set)
+        
         for record in attendance_records:
             attendance_by_employee[record.employee_id][record.date] = record
+            
+            # جمع معلومات عن أجهزة البصمة المستخدمة لكل موظف
+            if record.terminal_alias_in:
+                employee_terminals[record.employee_id].add(record.terminal_alias_in)
+            if record.terminal_alias_out:
+                employee_terminals[record.employee_id].add(record.terminal_alias_out)
             
         # Get weekend days from user settings
         weekend_days = []
@@ -209,12 +241,6 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             
         logger.info(f"Using weekend days: {weekend_days}")
         
-        # فهرس لأجهزة البصمة وربطها بالسكن
-        terminal_to_housing = {}
-        terminals = BiometricTerminal.query.all()
-        for terminal in terminals:
-            terminal_to_housing[terminal.terminal_alias] = terminal.housing_id
-            
         # Build employee rows for the timesheet
         employee_rows = []
         
@@ -253,17 +279,36 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                 if dept:
                     dept_name = dept.name
                     
-            # Get housing name
+            # استخراج معلومات السكن للموظف
+            employee_housing_id = employee.housing_id
             housing_name = ''
-            if employee.housing_id:
-                housing = Housing.query.get(employee.housing_id)
+            
+            # إذا كان للموظف سكن محدد، استخدم اسم السكن من قاعدة البيانات
+            if employee_housing_id:
+                housing = Housing.query.get(employee_housing_id)
                 if housing:
                     housing_name = housing.name
             
             # جمع معلومات عن أجهزة البصمة المستخدمة
-            devices = set()
+            devices = employee_terminals.get(employee.id, set())
             terminal_alias_in = None
-            employee_housing_id = employee.housing_id  # معرف السكن من جدول الموظفين
+            
+            # إذا لم يكن للموظف سكن محدد، حاول تحديد السكن من أجهزة البصمة
+            if not employee_housing_id and devices:
+                # محاولة العثور على أول جهاز بصمة مرتبط بسكن
+                for device in sorted(devices):  # ترتيب الأجهزة أبجدياً للحصول على نتائج متسقة
+                    if device in terminal_to_housing:
+                        employee_housing_id = terminal_to_housing[device]
+                        housing_name = terminal_to_housing.get(f"{device}_name", "")
+                        break
+            
+            # استخدام أول جهاز بصمة كجهاز افتراضي للموظف إذا كان موجوداً
+            if devices:
+                terminal_alias_in = sorted(devices)[0]  # استخدام أول جهاز بالترتيب الأبجدي
+            
+            # إذا لم يتم تحديد سكن للموظف حتى الآن، ضعه في "Unknown Housing"
+            if not housing_name:
+                housing_name = "Unknown Housing"
             
             # حساب إجمالي ساعات العمل والساعات الإضافية
             total_work_hours = 0
@@ -272,29 +317,8 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             for day_data in attendance_data:
                 record = day_data.get('record')
                 if record:
-                    # جمع معلومات أجهزة البصمة
-                    if record.terminal_alias_in:
-                        devices.add(record.terminal_alias_in)
-                        # إذا كان الموظف ليس لديه سكن محدد، حاول تحديد السكن من جهاز البصمة
-                        if not employee_housing_id and record.terminal_alias_in in terminal_to_housing:
-                            employee_housing_id = terminal_to_housing[record.terminal_alias_in]
-                            
-                    if record.terminal_alias_out:
-                        devices.add(record.terminal_alias_out)
-                    
-                    # حساب المجاميع
                     total_work_hours += record.work_hours or 0
                     total_overtime_hours += record.overtime_hours or 0
-            
-            # استخدام أول جهاز بصمة كجهاز افتراضي للموظف
-            if devices:
-                terminal_alias_in = sorted(devices)[0]  # استخدام أول جهاز بالترتيب الأبجدي
-            
-            # إذا لم يكن للموظف سكن محدد، لكن هناك جهاز بصمة مرتبط بسكن، احفظ هذا السكن
-            if not housing_name and employee_housing_id:
-                housing = Housing.query.get(employee_housing_id)
-                if housing:
-                    housing_name = housing.name
             
             employee_rows.append({
                 'id': employee.id,
@@ -312,8 +336,8 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                 'total_overtime_hours': total_overtime_hours  # إجمالي الساعات الإضافية
             })
         
-        # ترتيب الموظفين حسب السكن ثم حسب جهاز البصمة
-        employee_rows.sort(key=lambda x: (x.get('housing') or 'Unknown', x.get('terminal_alias_in') or 'Unknown'))
+        # ترتيب الموظفين حسب السكن ثم حسب الاسم
+        employee_rows.sort(key=lambda x: (x.get('housing') or 'Unknown Housing', x.get('name') or ''))
         
         # Get month period data if available
         from models import MonthPeriod

@@ -22,8 +22,8 @@ BIOTIME_USERNAME = os.environ.get("BIOTIME_USERNAME", "raghad")
 BIOTIME_PASSWORD = os.environ.get("BIOTIME_PASSWORD", "A1111111")
 DEPARTMENTS = [10]  # تحديث رقم القسم ليطابق الرابط الجديد
 
-# Enable mock mode for development/testing when BioTime servers are unavailable
-MOCK_MODE_ENABLED = os.environ.get("MOCK_MODE", "false").lower() == "true"
+# إلغاء تفعيل وضع البيانات التجريبية (تم تعديله لمنع استخدام البيانات التجريبية)
+MOCK_MODE_ENABLED = False
 
 # إعدادات نطاق التاريخ للمزامنة
 SYNC_START_DATE = os.environ.get("SYNC_START_DATE", "")
@@ -344,17 +344,41 @@ def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
                         timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
                     )
                     
+                    # Log detailed response information for debugging
+                    logger.info(f"API Response Status Code: {data_response.status_code}")
+                    logger.info(f"API Response Content Type: {data_response.headers.get('Content-Type', 'Unknown')}")
+                    
+                    # Check for common error status codes
+                    if data_response.status_code == 401:
+                        logger.error("Authentication failed - invalid username or password")
+                        raise ValueError("فشل المصادقة: اسم المستخدم أو كلمة المرور غير صحيحة")
+                    elif data_response.status_code == 403:
+                        logger.error("Authorization failed - insufficient permissions")
+                        raise ValueError("فشل التفويض: صلاحيات غير كافية للوصول إلى البيانات")
+                    elif data_response.status_code >= 400:
+                        logger.error(f"Server returned error status: {data_response.status_code}")
+                        raise ValueError(f"خطأ في الخادم: {data_response.status_code}")
+                    
+                    # Check if we have a successful response but verify content
                     if data_response and data_response.status_code == 200:
-                        logger.info("تم الاتصال بنجاح وتم تلقي البيانات")
-                        success = True
+                        # Try to get a small sample of the content to check format
+                        content_sample = data_response.content[:1000].decode('utf-8', errors='replace')
+                        logger.info(f"Response content sample: {content_sample[:200]}...")
+                        
+                        # Check if the response looks like CSV/TXT data (should contain commas and have multiple lines)
+                        if ',' in content_sample and '\n' in content_sample:
+                            logger.info("تم الاتصال بنجاح وتم تلقي البيانات بتنسيق مناسب")
+                            success = True
+                        else:
+                            logger.warning("Response doesn't look like valid CSV/TXT data")
+                            logger.warning(f"Content sample: {content_sample[:200]}")
+                            raise ValueError("استجابة غير صالحة: التنسيق غير مطابق للمتوقع")
                     else:
                         logger.warning(f"فشل الاتصال مع {current_url}: {data_response.status_code if data_response else 'No response'}")
                         update_sync_status("connect", 25, f"محاولة الاتصال بخادم بديل...", status="in_progress")
                         retry_count += 1
-                        
                 except Exception as e:
-                    logger.error(f"خطأ في الاتصال بـ {current_url}: {str(e)}")
-                    update_sync_status("connect", 25, f"فشل الاتصال، محاولة اتصال بديلة...", status="in_progress")
+                    logger.error(f"خطأ أثناء محاولة الاتصال: {str(e)}")
                     retry_count += 1
             
             # Step 4: Download and process data

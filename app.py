@@ -72,6 +72,9 @@ from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod,
 # Import the AI module
 from ai_analytics import BiometricAI
 
+# تعديل المتغير العام لتعطيل وضع البيانات التجريبية
+MOCK_MODE_ENABLED = False
+
 @app.before_request
 def before_request():
     # Set default language if not in session
@@ -126,8 +129,75 @@ def change_language(language):
 # Define route handlers
 @app.route('/')
 def index():
-    """Home page showing dashboard overview"""
-    return render_template('index.html')
+    """Homepage with dashboard"""
+    # Get housing stats for dashboard
+    housing_stats = data_processor.get_housing_stats()
+    
+    # Get department stats
+    dept_stats = data_processor.get_department_stats()
+    
+    # Get sync status for display
+    sync_status = sync_service.get_sync_status()
+    last_sync = None
+    
+    try:
+        last_sync = SyncLog.query.order_by(SyncLog.sync_time.desc()).first()
+    except Exception:
+        pass
+    
+    # Get attendance statistics for the last 30 days
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=30)
+    
+    present_count = AttendanceRecord.query.filter(
+        AttendanceRecord.date >= start_date,
+        AttendanceRecord.date <= end_date,
+        AttendanceRecord.attendance_status == 'P'
+    ).count()
+    
+    absent_count = AttendanceRecord.query.filter(
+        AttendanceRecord.date >= start_date,
+        AttendanceRecord.date <= end_date,
+        AttendanceRecord.attendance_status == 'A'
+    ).count()
+    
+    vacation_count = AttendanceRecord.query.filter(
+        AttendanceRecord.date >= start_date,
+        AttendanceRecord.date <= end_date,
+        AttendanceRecord.attendance_status == 'V'
+    ).count()
+    
+    # Calculate attendance percentage
+    total_records = present_count + absent_count + vacation_count
+    attendance_pct = round((present_count / total_records) * 100, 1) if total_records > 0 else 0
+    
+    # Get total employees count
+    employee_count = Employee.query.count()
+    
+    # Get active terminals count
+    active_terminals = Terminal.query.count()
+    
+    # Get recent records
+    recent_records = AttendanceRecord.query.order_by(
+        AttendanceRecord.date.desc(), 
+        AttendanceRecord.clock_in.desc()
+    ).limit(10).all()
+    
+    return render_template(
+        'index.html',
+        housing_stats=housing_stats,
+        dept_stats=dept_stats,
+        employee_count=employee_count,
+        terminals_count=active_terminals,
+        attendance_pct=attendance_pct,
+        present_count=present_count,
+        absent_count=absent_count,
+        vacation_count=vacation_count,
+        recent_records=recent_records,
+        sync_status=sync_status,
+        last_sync=last_sync,
+        mock_mode_enabled=False  # تعديل لعدم استخدام البيانات التجريبية
+    )
 
 @app.route('/dashboard/ar')
 def arabic_dashboard():
@@ -224,6 +294,115 @@ def departments():
     """View and manage departments"""
     departments = Department.query.all()
     return render_template('departments.html', departments=departments)
+
+@app.route('/add_department', methods=['POST'])
+def add_department():
+    """Add a new department"""
+    try:
+        name = request.form.get('department_name')
+        biotime_id = request.form.get('biotime_id')
+        
+        if not name or not biotime_id:
+            flash('اسم القسم ومعرف النظام مطلوبان', 'danger')
+            return redirect(url_for('departments'))
+        
+        # Check if department already exists with this name or ID
+        existing_dept = Department.query.filter((Department.name == name) | 
+                                             (Department.biotime_id == biotime_id)).first()
+        if existing_dept:
+            flash('يوجد قسم بنفس الاسم أو رقم المعرف', 'danger')
+            return redirect(url_for('departments'))
+        
+        new_department = Department(
+            name=name,
+            biotime_id=biotime_id,
+            active=True
+        )
+        
+        db.session.add(new_department)
+        db.session.commit()
+        
+        flash('تمت إضافة القسم بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error adding department: {str(e)}")
+        flash(f'حدث خطأ أثناء إضافة القسم: {str(e)}', 'danger')
+    
+    return redirect(url_for('departments'))
+
+@app.route('/edit_department', methods=['POST'])
+def edit_department():
+    """Edit existing department"""
+    try:
+        dept_id = request.form.get('department_id')
+        name = request.form.get('department_name')
+        biotime_id = request.form.get('biotime_id')
+        active = request.form.get('active') == 'on'
+        
+        if not dept_id or not name or not biotime_id:
+            flash('معرف واسم القسم ومعرف النظام مطلوبة', 'danger')
+            return redirect(url_for('departments'))
+        
+        department = Department.query.get(dept_id)
+        if not department:
+            flash('لم يتم العثور على القسم', 'danger')
+            return redirect(url_for('departments'))
+        
+        # Check if another department has this name or ID
+        existing_dept = Department.query.filter(
+            ((Department.name == name) | (Department.biotime_id == biotime_id)) & 
+            (Department.id != department.id)
+        ).first()
+        
+        if existing_dept:
+            flash('يوجد قسم آخر بنفس الاسم أو رقم المعرف', 'danger')
+            return redirect(url_for('departments'))
+        
+        department.name = name
+        department.biotime_id = biotime_id
+        department.active = active
+        
+        db.session.commit()
+        
+        flash('تم تحديث القسم بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating department: {str(e)}")
+        flash(f'حدث خطأ أثناء تحديث القسم: {str(e)}', 'danger')
+    
+    return redirect(url_for('departments'))
+
+@app.route('/delete_department', methods=['POST'])
+def delete_department():
+    """Delete department"""
+    try:
+        dept_id = request.form.get('department_id')
+        
+        if not dept_id:
+            flash('معرف القسم مطلوب', 'danger')
+            return redirect(url_for('departments'))
+        
+        department = Department.query.get(dept_id)
+        if not department:
+            flash('لم يتم العثور على القسم', 'danger')
+            return redirect(url_for('departments'))
+        
+        # Check if there are employees in this department
+        employees_count = Employee.query.filter_by(department_id=dept_id).count()
+        if employees_count > 0:
+            flash(f'لا يمكن حذف القسم لأنه يحتوي على {employees_count} موظف. قم بنقل الموظفين أولاً.', 'warning')
+            return redirect(url_for('departments'))
+        
+        db.session.delete(department)
+        db.session.commit()
+        
+        flash('تم حذف القسم بنجاح', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting department: {str(e)}")
+        flash(f'حدث خطأ أثناء حذف القسم: {str(e)}', 'danger')
+    
+    return redirect(url_for('departments'))
 
 @app.route('/settings')
 def settings():
@@ -1237,6 +1416,96 @@ def employee_performance():
         logger.error(f"Error in employee performance page: {str(e)}")
         flash(f"Error loading employee performance data: {str(e)}", "danger")
         return redirect(url_for('index'))
+
+@app.route('/api/departments/<int:department_id>/employees')
+def get_department_employees(department_id):
+    """API endpoint to get employees of a specific department"""
+    try:
+        department = Department.query.get(department_id)
+        if not department:
+            return jsonify({'success': False, 'error': 'Department not found'}), 404
+        
+        employees = Employee.query.filter_by(department_id=department_id).all()
+        employees_list = []
+        
+        for employee in employees:
+            housing_name = None
+            if employee.housing:
+                housing_name = employee.housing.name
+                
+            employees_list.append({
+                'id': employee.id,
+                'emp_code': employee.emp_code,
+                'name': employee.name,
+                'name_ar': employee.name_ar,
+                'profession': employee.profession,
+                'housing_id': employee.housing_id,
+                'housing_name': housing_name,
+                'active': employee.active,
+                'daily_hours': employee.daily_hours
+            })
+        
+        return jsonify({'success': True, 'employees': employees_list})
+    except Exception as e:
+        logger.error(f"Error fetching department employees: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/departments/<int:department_id>/statistics')
+def get_department_statistics(department_id):
+    """API endpoint to get statistics for a specific department"""
+    try:
+        department = Department.query.get(department_id)
+        if not department:
+            return jsonify({'success': False, 'error': 'Department not found'}), 404
+        
+        # Get end date and start date (last 30 days)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=30)
+        
+        # Get employee IDs for this department
+        employee_ids = [e.id for e in Employee.query.filter_by(department_id=department_id).all()]
+        
+        if not employee_ids:
+            return jsonify({
+                'success': True, 
+                'attendance_stats': {'present': 0, 'absent': 0, 'vacation': 0, 'sick': 0},
+                'message': 'No employees found in this department'
+            })
+        
+        # Query attendance records for these employees
+        records = AttendanceRecord.query.filter(
+            AttendanceRecord.employee_id.in_(employee_ids),
+            AttendanceRecord.date >= start_date,
+            AttendanceRecord.date <= end_date
+        ).all()
+        
+        # Count by attendance status
+        present_count = sum(1 for r in records if r.attendance_status == 'P')
+        absent_count = sum(1 for r in records if r.attendance_status == 'A')
+        vacation_count = sum(1 for r in records if r.attendance_status == 'V')
+        sick_count = sum(1 for r in records if r.attendance_status == 'S')
+        
+        # Create statistics
+        attendance_stats = {
+            'present': present_count,
+            'absent': absent_count,
+            'vacation': vacation_count,
+            'sick': sick_count
+        }
+        
+        return jsonify({
+            'success': True, 
+            'attendance_stats': attendance_stats,
+            'employee_count': len(employee_ids),
+            'record_count': len(records),
+            'date_range': {
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d')
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error calculating department statistics: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Initialize scheduler when app is ready
 with app.app_context():

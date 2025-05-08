@@ -78,27 +78,27 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% set device_groups = {} %}
+                    {% set housing_groups = {} %}
                     
-                    <!-- Group employees by device -->
+                    <!-- Group employees by housing instead of device -->
                     {% for employee in timesheet_data.employees %}
-                        {% set device = employee.terminal_alias_in|default('Unknown') %}
-                        {% if device not in device_groups %}
-                            {% set _ = device_groups.update({device: []}) %}
+                        {% set housing = employee.housing|default('Unknown Housing') %}
+                        {% if housing not in housing_groups %}
+                            {% set _ = housing_groups.update({housing: []}) %}
                         {% endif %}
-                        {% set _ = device_groups[device].append(employee) %}
+                        {% set _ = housing_groups[housing].append(employee) %}
                     {% endfor %}
                     
-                    <!-- Display employees grouped by terminal device -->
-                    {% for device, employees in device_groups.items() %}
-                        <!-- Device header row -->
+                    <!-- Display employees grouped by housing -->
+                    {% for housing, employees in housing_groups.items() %}
+                        <!-- Housing header row -->
                         <tr class="bg-secondary">
                             <td colspan="{{ 3 + timesheet_data.dates|length + 2 }}" class="font-weight-bold">
-                                {{ device }}
+                                {{ housing }}
                             </td>
                         </tr>
                         
-                        <!-- Employees for this device -->
+                        <!-- Employees for this housing -->
                         {% for employee in employees %}
                             <tr>
                                 <td>{{ employee.emp_code }}</td>

@@ -92,11 +92,7 @@
                     <div class="mb-3">
                         <label class="form-label">{{ t('sync_status') }}</label>
                         <div id="sync-status-container">
-                            {% if mock_mode_enabled %}
-                            <div class="alert alert-warning mb-2">
-                                <i class="fas fa-robot me-2"></i> <strong>Mock Mode Enabled</strong> - Using simulated data since BioTime API servers are unavailable
-                            </div>
-                            {% endif %}
+                            <!-- تم إزالة رسالة وضع المحاكاة -->
                             <div class="d-flex align-items-center">
                                 {% if last_sync and last_sync.status == 'success' %}
                                     <span class="badge bg-success me-2"><i class="fas fa-check"></i></span>
@@ -115,51 +111,31 @@
                                     <span>No sync data available</span>
                                 {% endif %}
                             </div>
-                            
-                            {% if last_sync and last_sync.status == 'in_progress' %}
-                            <div class="progress mt-2" style="height: 25px;">
-                                <div id="sync-progress-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">Connecting to BioTime...</div>
+                        </div>
+                        
+                        <!-- Agregar el elemento sync-steps que estaba faltando -->
+                        <div id="sync-steps" class="mt-3 d-none">
+                            <div class="fw-bold mb-2">{{ t('sync_progress') }}</div>
+                            <div id="step-connect" class="d-flex align-items-center mb-1">
+                                <span id="connect-icon" class="badge me-2 bg-secondary"><i class="fas fa-circle"></i></span>
+                                <span>{{ t('connecting_to_server') }}</span>
                             </div>
-                            
-                            <!-- زر إلغاء المزامنة -->
-                            <form action="{{ url_for('cancel_sync') }}" method="post" class="mt-2">
-                                <button type="submit" class="btn btn-danger" id="cancel-sync-btn">
-                                    <i class="fas fa-times-circle"></i> إلغاء المزامنة
-                                </button>
-                            </form>
-                            {% endif %}
-                            
-                            <div id="sync-steps" class="mt-2 d-none">
-                                <div class="d-flex flex-column">
-                                    <div id="step-connect" class="d-flex align-items-center mb-1">
-                                        <span id="connect-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
-                                        <span>الاتصال بنظام البصمة (Connecting to BioTime)</span>
-                                    </div>
-                                    <div id="step-download" class="d-flex align-items-center mb-1">
-                                        <span id="download-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
-                                        <span>تحميل البيانات (Downloading data)</span>
-                                    </div>
-                                    <div id="step-process" class="d-flex align-items-center mb-1">
-                                        <span id="process-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
-                                        <span>معالجة البيانات (Processing data)</span>
-                                    </div>
-                                    <div id="step-save" class="d-flex align-items-center mb-1">
-                                        <span id="save-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
-                                        <span>حفظ في قاعدة البيانات (Saving to database)</span>
-                                    </div>
-                                    <div id="step-complete" class="d-flex align-items-center">
-                                        <span id="complete-icon" class="badge bg-secondary me-2"><i class="fas fa-circle"></i></span>
-                                        <span>إكمال المزامنة (Sync complete)</span>
-                                    </div>
-                                </div>
+                            <div id="step-download" class="d-flex align-items-center mb-1">
+                                <span id="download-icon" class="badge me-2 bg-secondary"><i class="fas fa-circle"></i></span>
+                                <span>{{ t('downloading_data') }}</span>
                             </div>
-                            
-                            {% if last_sync and last_sync.status != 'success' and last_sync.error_message %}
-                                <div class="alert alert-danger mt-2">
-                                    <h6>Error Details:</h6>
-                                    <pre class="mb-0">{{ last_sync.error_message }}</pre>
-                                </div>
-                            {% endif %}
+                            <div id="step-process" class="d-flex align-items-center mb-1">
+                                <span id="process-icon" class="badge me-2 bg-secondary"><i class="fas fa-circle"></i></span>
+                                <span>{{ t('processing_data') }}</span>
+                            </div>
+                            <div id="step-save" class="d-flex align-items-center mb-1">
+                                <span id="save-icon" class="badge me-2 bg-secondary"><i class="fas fa-circle"></i></span>
+                                <span>{{ t('saving_data') }}</span>
+                            </div>
+                            <div id="step-complete" class="d-flex align-items-center">
+                                <span id="complete-icon" class="badge me-2 bg-secondary"><i class="fas fa-circle"></i></span>
+                                <span>{{ t('completing_sync') }}</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -424,10 +400,10 @@
                     <table class="table table-dark table-hover" id="terminals-table">
                         <thead>
                             <tr>
-                                <th>اسم الجهاز</th>
+                                <th>اسم السكن</th>
                                 <th>معرف الجهاز</th>
+                                <th>اسم الجهاز</th>
                                 <th>الموقع</th>
-                                <th>السكن المرتبط</th>
                                 <th>الإجراءات</th>
                             </tr>
                         </thead>
@@ -435,9 +411,6 @@
                             {% if terminals %}
                                 {% for terminal in terminals %}
                                     <tr>
-                                        <td>{{ terminal.terminal_alias }}</td>
-                                        <td>{{ terminal.device_id }}</td>
-                                        <td>{{ terminal.location }}</td>
                                         <td>
                                             {% if terminal.housing %}
                                                 {{ terminal.housing.name }}
@@ -445,6 +418,9 @@
                                                 <span class="text-warning">غير مرتبط</span>
                                             {% endif %}
                                         </td>
+                                        <td>{{ terminal.device_id }}</td>
+                                        <td>{{ terminal.terminal_alias }}</td>
+                                        <td>{{ terminal.location }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm" role="group">
                                                 <button type="button" class="btn btn-primary btn-sm edit-terminal-btn"
@@ -756,146 +732,97 @@
         // Set up sync button functionality
         const syncNowBtn = document.getElementById('sync-now-btn');
         if (syncNowBtn) {
-            syncNowBtn.addEventListener('click', function(e) {
-                e.preventDefault(); // Prevent the default link behavior
-                
-                console.log('Sync now button clicked');
-                
-                // Get the start and end dates from the form
-                let startDate = document.getElementById('start_date').value;
-                let endDate = document.getElementById('end_date').value;
-                
-                // If both dates are provided, use them directly
-                if (startDate && endDate) {
-                    console.log(`Using user-specified date range: ${startDate} to ${endDate}`);
-                } 
-                // If one or both dates are missing, show a confirmation
-                else {
-                    if (!confirm('لم يتم تحديد نطاق تاريخ كامل للمزامنة. هل تريد استخدام التاريخ الحالي وقبله بشهر؟')) {
-                        return false; // User canceled
+            syncNowBtn.addEventListener('click', function() {
+                if (confirm('هل أنت متأكد من بدء المزامنة الآن؟')) {
+                    // إظهار أيقونة التحميل
+                    this.disabled = true;
+                    this.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> جاري المزامنة...';
+                    
+                    // الحصول على قيم التاريخ من النموذج
+                    const startDate = document.getElementById('start_date').value;
+                    const endDate = document.getElementById('end_date').value;
+                    
+                    // تحضير عنوان URL للطلب مع معلمات التاريخ
+                    let syncUrl = "{{ url_for('trigger_sync') }}";
+                    if (startDate || endDate) {
+                        syncUrl += '?';
+                        if (startDate) syncUrl += `start_date=${startDate}`;
+                        if (startDate && endDate) syncUrl += '&';
+                        if (endDate) syncUrl += `end_date=${endDate}`;
                     }
                     
-                    // Set today and one month ago as default dates
-                    let today = new Date();
-                    let oneMonthAgo = new Date();
-                    oneMonthAgo.setMonth(today.getMonth() - 1);
-                    
-                    // Format dates as YYYY-MM-DD
-                    let todayFormatted = today.toISOString().split('T')[0];
-                    let oneMonthAgoFormatted = oneMonthAgo.toISOString().split('T')[0];
-                    
-                    if (!endDate) {
-                        document.getElementById('end_date').value = todayFormatted;
-                        endDate = todayFormatted;
+                    // إظهار خطوات المزامنة
+                    const syncStepsEl = document.getElementById('sync-steps');
+                    if (syncStepsEl) {
+                        syncStepsEl.classList.remove('d-none');
                     }
                     
-                    if (!startDate) {
-                        document.getElementById('start_date').value = oneMonthAgoFormatted;
-                        startDate = oneMonthAgoFormatted;
+                    // تحديث حالة المزامنة
+                    updateSyncStatus('in_progress', 'بدأت عملية المزامنة...');
+                    
+                    // تعيين حالة الخطوات
+                    setStepStatus('connect', 'pending');
+                    setStepStatus('download', 'waiting');
+                    setStepStatus('process', 'waiting');
+                    setStepStatus('save', 'waiting');
+                    setStepStatus('complete', 'waiting');
+                    
+                    // إظهار شريط التقدم
+                    const container = document.getElementById('sync-status-container');
+                    if (container && !container.querySelector('.progress')) {
+                        container.innerHTML += `
+                            <div class="progress mt-2" style="height: 25px;">
+                                <div id="sync-progress-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" role="progressbar" style="width: 10%;" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">الاتصال بالخادم...</div>
+                            </div>
+                            <form action="{{ url_for('cancel_sync') }}" method="post" class="mt-2">
+                                <button type="submit" class="btn btn-danger" id="cancel-sync-btn">
+                                    <i class="fas fa-times-circle"></i> إلغاء المزامنة
+                                </button>
+                            </form>
+                        `;
                     }
                     
-                    console.log(`Auto-set date range: ${startDate} to ${endDate}`);
-                }
-                
-                // Show sync steps visual feedback
-                const syncStepsEl = document.getElementById('sync-steps');
-                if (syncStepsEl) {
-                    syncStepsEl.classList.remove('d-none');
-                }
-                
-                // Update the status display
-                updateSyncStatus('in_progress', 'جاري بدء المزامنة...');
-                
-                // Set all steps to waiting status
-                setStepStatus('connect', 'pending');
-                setStepStatus('download', 'waiting');
-                setStepStatus('process', 'waiting');
-                setStepStatus('save', 'waiting');
-                setStepStatus('complete', 'waiting');
-                
-                // Create URL with date parameters
-                let syncUrl = new URL("{{ url_for('trigger_sync', _external=True) }}");
-                syncUrl.searchParams.append('start_date', startDate);
-                syncUrl.searchParams.append('end_date', endDate);
-                
-                // Make the actual fetch call to trigger the sync
-                fetch(syncUrl.toString(), {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                }).then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    
-                    // Start checking the sync status periodically
-                    simulateSyncProgress();
-                    
-                    // Start checking for completion
-                    setTimeout(checkSyncResult, 5000);
-                    
-                    return response.text(); 
-                }).then(data => {
-                    console.log('Sync triggered successfully');
-                    
-                    // Force the form to remain visible with aggressive style overrides
-                    try {
-                        // Target the form element directly
-                        const settingsForm = document.querySelector('form[action="{{ url_for("save_settings") }}"]');
-                        
-                        // Apply aggressive style overrides to ensure form visibility
-                        if (settingsForm) {
-                            // Apply direct inline styles with !important to override any other styles
-                            settingsForm.setAttribute('style', 
-                                'display: block !important; ' +
-                                'visibility: visible !important; ' +
-                                'opacity: 1 !important; ' +
-                                'pointer-events: auto !important; ' +
-                                'transition: none !important; ' + 
-                                'animation: none !important; ' +
-                                'height: auto !important; ' +
-                                'overflow: visible !important;'
-                            );
-                            
-                            // Make sure all children are also visible and enabled
-                            const formElements = settingsForm.querySelectorAll('.mb-3, .row.mb-3');
-                            formElements.forEach(el => {
-                                el.setAttribute('style', 
-                                    'display: block !important; ' +
-                                    'visibility: visible !important; ' +
-                                    'opacity: 1 !important; ' +
-                                    'pointer-events: auto !important; ' +
-                                    'transition: none !important; ' + 
-                                    'animation: none !important; ' +
-                                    'height: auto !important;'
-                                );
-                            });
-                            
-                            // Enable all form controls
-                            const formControls = settingsForm.querySelectorAll('input, select, textarea, button');
-                            formControls.forEach(control => {
-                                control.disabled = false;
-                                control.setAttribute('style', 
-                                    'pointer-events: auto !important; ' +
-                                    'opacity: 1 !important;'
-                                );
-                            });
-                            
-                            console.log('Applied aggressive style overrides to ensure form stays visible');
-                        } else {
-                            console.error('Could not find the settings form element');
+                    // بدء المزامنة
+                    fetch(syncUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
                         }
-                    } catch (err) {
-                        console.error('Error ensuring form visibility:', err);
-                    }
-
-                }).catch(error => {
-                    console.error('Error triggering sync:', error);
-                    failSyncAnimation('Error triggering sync: ' + error.message);
-                });
-                
-                return false; // Prevent default action
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('فشل في الاتصال بالخادم');
+                        }
+                        // استخدام معالج للخطأ في حالة عدم وجود صيغة JSON
+                        return response.text().then(text => {
+                            try {
+                                return JSON.parse(text);
+                            } catch (e) {
+                                // إذا كان النص لا يحتوي على JSON صالح، قم بإرجاع كائن بسيط
+                                console.error('Invalid JSON response:', text);
+                                return { status: 'error', message: 'استجابة غير صالحة من الخادم' };
+                            }
+                        });
+                    })
+                    .then(data => {
+                        if (data.status === 'success' || data.status === 'started') {
+                            // تم بدء المزامنة، بدء محاكاة التقدم
+                            simulateSyncProgress();
+                            setTimeout(checkSyncResult, 3000);
+                        } else {
+                            // فشلت المزامنة
+                            failSyncAnimation(data.message || 'فشل في بدء المزامنة');
+                            this.disabled = false;
+                            this.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Sync error:', error);
+                        failSyncAnimation(error.message);
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                    });
+                }
             });
         }
         
@@ -929,115 +856,478 @@
         
         // Error modal handling
         document.querySelectorAll('.error-btn').forEach(btn => {
-            // ...existing code...
+            btn.addEventListener('click', function() {
+                const errorMessage = this.getAttribute('data-error');
+                document.getElementById('errorDetails').textContent = errorMessage;
+            });
         });
         
         // File upload validation
-        document.getElementById('sync_file').addEventListener('change', function() {
-            // ...existing code...
-        });
+        const syncFileInput = document.getElementById('sync_file');
+        if (syncFileInput) {
+            syncFileInput.addEventListener('change', function() {
+                // ...existing code...
+            });
+        }
         
         // Check for ongoing sync on page load
         checkSyncStatus();
 
         // Housing management
         document.querySelectorAll('.edit-housing-btn').forEach(btn => {
-            // ...existing code...
+            btn.addEventListener('click', function() {
+                const housingId = this.getAttribute('data-housing-id');
+                const housingName = this.getAttribute('data-housing-name');
+                const housingLocation = this.getAttribute('data-housing-location') || '';
+                const housingDescription = this.getAttribute('data-housing-description') || '';
+                
+                document.getElementById('edit_housing_id').value = housingId;
+                document.getElementById('edit_housing_name').value = housingName;
+                document.getElementById('edit_housing_location').value = housingLocation;
+                document.getElementById('edit_housing_description').value = housingDescription;
+                
+                // افتح المودال لتعديل السكن
+                const modal = new bootstrap.Modal(document.getElementById('editHousingModal'));
+                modal.show();
+            });
         });
         
         document.querySelectorAll('.delete-housing-btn').forEach(btn => {
-            // ...existing code...
+            btn.addEventListener('click', function() {
+                if (confirm(`هل أنت متأكد من حذف سكن "${this.getAttribute('data-housing-name')}"؟`)) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = "{{ url_for('delete_housing') }}";
+                    
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'housing_id';
+                    input.value = this.getAttribute('data-housing-id');
+                    
+                    form.appendChild(input);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
         });
         
         // Terminal management
         document.querySelectorAll('.edit-terminal-btn').forEach(btn => {
-            // ...existing code...
+            btn.addEventListener('click', function() {
+                const terminalId = this.getAttribute('data-terminal-id');
+                const terminalAlias = this.getAttribute('data-terminal-alias');
+                const deviceId = this.getAttribute('data-device-id');
+                const location = this.getAttribute('data-location') || '';
+                const housingId = this.getAttribute('data-housing-id') || '';
+                
+                document.getElementById('edit_terminal_id').value = terminalId;
+                document.getElementById('edit_terminal_alias').value = terminalAlias;
+                document.getElementById('edit_device_id').value = deviceId;
+                document.getElementById('edit_terminal_location').value = location;
+                document.getElementById('edit_housing_id').value = housingId;
+                
+                // افتح المودال لتعديل جهاز البصمة
+                const modal = new bootstrap.Modal(document.getElementById('editTerminalModal'));
+                modal.show();
+            });
         });
         
         document.querySelectorAll('.delete-terminal-btn').forEach(btn => {
-            // ...existing code...
+            btn.addEventListener('click', function() {
+                if (confirm(`هل أنت متأكد من حذف جهاز البصمة "${this.getAttribute('data-terminal-alias')}"؟`)) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = "{{ url_for('delete_terminal') }}";
+                    
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'terminal_id';
+                    input.value = this.getAttribute('data-terminal-id');
+                    
+                    form.appendChild(input);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
         });
         
-        // View terminals for a specific housing
+        // View terminals for a specific housing - هذا هو الكود المهم الذي يعرض أجهزة البصمة
         document.querySelectorAll('.view-terminals-btn').forEach(btn => {
-            // ...existing code...
+            btn.addEventListener('click', function() {
+                const housingId = this.getAttribute('data-housing-id');
+                const housingName = this.getAttribute('data-housing-name');
+                
+                // تعيين اسم السكن في عنوان المودال
+                document.getElementById('housing-name-title').textContent = housingName;
+                
+                // تفريغ جدول أجهزة البصمة
+                document.getElementById('housing-terminals-body').innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border text-light" role="status"><span class="visually-hidden">جاري التحميل...</span></div></td></tr>';
+                
+                // إعداد زر إضافة جهاز البصمة
+                document.getElementById('add-terminal-to-housing-btn').onclick = function() {
+                    const addTerminalModal = new bootstrap.Modal(document.getElementById('addTerminalModal'));
+                    // تحديد السكن المراد إضافة جهاز البصمة إليه
+                    document.getElementById('housing_id').value = housingId;
+                    addTerminalModal.show();
+                };
+                
+                // عرض المودال
+                const viewTerminalsModal = new bootstrap.Modal(document.getElementById('viewTerminalsModal'));
+                viewTerminalsModal.show();
+                
+                // جلب أجهزة البصمة من الخادم
+                fetch(`{{ url_for('get_housing_terminals') }}?housing_id=${housingId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const terminalsTable = document.getElementById('housing-terminals-body');
+                            const noTerminalsMessage = document.getElementById('no-terminals-message');
+                            
+                            // إذا لم تكن هناك أجهزة بصمة
+                            if (!data.terminals || data.terminals.length === 0) {
+                                terminalsTable.innerHTML = '';
+                                noTerminalsMessage.classList.remove('d-none');
+                            } else {
+                                // إذا كانت هناك أجهزة بصمة
+                                noTerminalsMessage.classList.add('d-none');
+                                terminalsTable.innerHTML = '';
+                                
+                                data.terminals.forEach(terminal => {
+                                    const row = document.createElement('tr');
+                                    row.innerHTML = `
+                                        <td>${terminal.terminal_alias}</td>
+                                        <td>${terminal.device_id}</td>
+                                        <td>${terminal.location || '-'}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn btn-primary btn-sm edit-terminal-modal-btn"
+                                                    data-terminal-id="${terminal.id}"
+                                                    data-terminal-alias="${terminal.terminal_alias}"
+                                                    data-device-id="${terminal.device_id}"
+                                                    data-location="${terminal.location || ''}"
+                                                    data-housing-id="${terminal.housing_id || ''}">
+                                                    <i class="fas fa-edit"></i> تعديل
+                                                </button>
+                                                <button class="btn btn-danger btn-sm remove-terminal-btn"
+                                                    data-terminal-id="${terminal.id}"
+                                                    data-terminal-alias="${terminal.terminal_alias}">
+                                                    <i class="fas fa-unlink"></i> إلغاء الربط
+                                                </button>
+                                            </div>
+                                        </td>
+                                    `;
+                                    terminalsTable.appendChild(row);
+                                });
+                                
+                                // إضافة معالجي الأحداث للأزرار داخل المودال
+                                terminalsTable.querySelectorAll('.edit-terminal-modal-btn').forEach(modalBtn => {
+                                    modalBtn.addEventListener('click', function() {
+                                        const terminalId = this.getAttribute('data-terminal-id');
+                                        const terminalAlias = this.getAttribute('data-terminal-alias');
+                                        const deviceId = this.getAttribute('data-device-id');
+                                        const location = this.getAttribute('data-location');
+                                        const tHousingId = this.getAttribute('data-housing-id');
+                                        
+                                        // تعبئة نموذج تعديل جهاز البصمة
+                                        document.getElementById('edit_terminal_id').value = terminalId;
+                                        document.getElementById('edit_terminal_alias').value = terminalAlias;
+                                        document.getElementById('edit_device_id').value = deviceId;
+                                        document.getElementById('edit_terminal_location').value = location;
+                                        document.getElementById('edit_housing_id').value = tHousingId || housingId;
+                                        
+                                        // إغلاق مودال عرض الأجهزة وفتح مودال التعديل
+                                        viewTerminalsModal.hide();
+                                        const editTerminalModal = new bootstrap.Modal(document.getElementById('editTerminalModal'));
+                                        editTerminalModal.show();
+                                    });
+                                });
+                                
+                                // إضافة معالج الحدث لزر إلغاء الربط
+                                terminalsTable.querySelectorAll('.remove-terminal-btn').forEach(removeBtn => {
+                                    removeBtn.addEventListener('click', function() {
+                                        if (confirm(`هل أنت متأكد من إلغاء ربط جهاز البصمة "${this.getAttribute('data-terminal-alias')}" بالسكن؟`)) {
+                                            const form = document.createElement('form');
+                                            form.method = 'POST';
+                                            form.action = "{{ url_for('remove_terminal_housing') }}";
+                                            
+                                            const input = document.createElement('input');
+                                            input.type = 'hidden';
+                                            input.name = 'terminal_id';
+                                            input.value = this.getAttribute('data-terminal-id');
+                                            
+                                            form.appendChild(input);
+                                            document.body.appendChild(form);
+                                            form.submit();
+                                        }
+                                    });
+                                });
+                            }
+                        } else {
+                            // في حالة حدوث خطأ
+                            document.getElementById('housing-terminals-body').innerHTML = `<tr><td colspan="4" class="text-center text-danger">حدث خطأ أثناء جلب بيانات أجهزة البصمة: ${data.error || 'خطأ غير معروف'}</td></tr>`;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching terminals:', error);
+                        document.getElementById('housing-terminals-body').innerHTML = `<tr><td colspan="4" class="text-center text-danger">حدث خطأ في الاتصال بالخادم</td></tr>`;
+                    });
+            });
         });
+        
+        // إضافة معالج الحدث لزر "عرض سجل المزامنة الكامل"
+        const viewHistoryBtn = document.getElementById('view-full-history');
+        if (viewHistoryBtn) {
+            viewHistoryBtn.addEventListener('click', function() {
+                window.location.href = "{{ url_for('sync_results') }}";
+            });
+        }
     });
     
     // Helper functions for sync status
     function updateSyncStatus(status, message) {
-        // ...existing code...
+        const container = document.getElementById('sync-status-container');
+        if (!container) return;
+        
+        const statusHTML = `
+            <div class="d-flex align-items-center">
+                ${getStatusBadgeHTML(status)}
+                <span>${message || getStatusMessage(status)}</span>
+            </div>
+        `;
+        
+        // الاحتفاظ بعناصر المعالجة وشريط التقدم إذا كانت موجودة
+        const progressBar = container.querySelector('.progress');
+        const syncSteps = container.querySelector('#sync-steps');
+        const cancelForm = container.querySelector('form[action="{{ url_for("cancel_sync") }}"]');
+        
+        // تحديث حالة المزامنة
+        container.innerHTML = statusHTML;
+        
+        // إعادة إضافة العناصر المحذوفة إذا كانت المزامنة جارية
+        if (status === 'in_progress') {
+            if (progressBar) container.appendChild(progressBar);
+            if (cancelForm) container.appendChild(cancelForm);
+            if (syncSteps) container.appendChild(syncSteps);
+        }
     }
     
     function getStatusBadgeHTML(status) {
-        // ...existing code...
+        switch (status) {
+            case 'success':
+                return '<span class="badge bg-success me-2"><i class="fas fa-check"></i></span>';
+            case 'error':
+                return '<span class="badge bg-danger me-2"><i class="fas fa-times"></i></span>';
+            case 'in_progress':
+                return '<span class="badge bg-primary me-2"><i class="fas fa-sync-alt fa-spin"></i></span>';
+            case 'partial':
+                return '<span class="badge bg-warning me-2"><i class="fas fa-exclamation-triangle"></i></span>';
+            default:
+                return '<span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>';
+        }
     }
     
     function getStatusMessage(status) {
-        // ...existing code...
+        switch (status) {
+            case 'success':
+                return 'المزامنة اكتملت بنجاح';
+            case 'error':
+                return 'فشلت عملية المزامنة';
+            case 'in_progress':
+                return 'جاري المزامنة...';
+            case 'partial':
+                return 'اكتملت المزامنة جزئياً';
+            default:
+                return 'لا توجد بيانات للمزامنة';
+        }
     }
     
     function updateProgressBar(percent, message) {
-        // ...existing code...
+        const progressBar = document.getElementById('sync-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = percent + '%';
+            progressBar.setAttribute('aria-valuenow', percent);
+            progressBar.textContent = message || `${percent}%`;
+        }
     }
     
     function setStepStatus(step, status) {
-        // ...existing code...
+        const stepElement = document.getElementById(`step-${step}`);
+        const iconElement = document.getElementById(`${step}-icon`);
+        
+        if (!stepElement || !iconElement) return;
+        
+        // إعادة تعيين جميع الفئات
+        iconElement.className = 'badge me-2';
+        
+        switch (status) {
+            case 'waiting':
+                iconElement.classList.add('bg-secondary');
+                iconElement.innerHTML = '<i class="fas fa-circle"></i>';
+                break;
+            case 'pending':
+                iconElement.classList.add('bg-primary');
+                iconElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                break;
+            case 'success':
+                iconElement.classList.add('bg-success');
+                iconElement.innerHTML = '<i class="fas fa-check"></i>';
+                break;
+            case 'error':
+                iconElement.classList.add('bg-danger');
+                iconElement.innerHTML = '<i class="fas fa-times"></i>';
+                break;
+        }
     }
     
     function simulateSyncProgress() {
-        // ...existing code...
+        // محاكاة تقدم المزامنة بمؤثرات بصرية
+        setTimeout(() => {
+            setStepStatus('connect', 'success');
+            setStepStatus('download', 'pending');
+            updateProgressBar(25, 'تحميل البيانات...');
+            
+            setTimeout(() => {
+                setStepStatus('download', 'success');
+                setStepStatus('process', 'pending');
+                updateProgressBar(50, 'معالجة البيانات...');
+                
+                setTimeout(() => {
+                    setStepStatus('process', 'success');
+                    setStepStatus('save', 'pending');
+                    updateProgressBar(75, 'حفظ البيانات...');
+                }, 3000);
+            }, 3000);
+        }, 2000);
     }
     
     function completeSyncAnimation(data) {
         setStepStatus('save', 'success');
         setStepStatus('complete', 'success');
-        updateProgressBar(100, 'Sync completed successfully');
+        updateProgressBar(100, 'اكتملت المزامنة بنجاح');
         
-        let message = 'Synchronization completed successfully';
+        let message = 'المزامنة اكتملت بنجاح';
         if (data && data.records) {
-            message += ` (${data.records} records synced)`;
+            message += ` (${data.records} سجل تمت مزامنته)`;
         }
         
         updateSyncStatus('success', message);
         
-        // DO NOT reload the page automatically - let user see the results
+        // لا تقم بإعادة تحميل الصفحة تلقائيًا - دع المستخدم يرى النتائج
         console.log('Sync completed successfully');
     }
     
     function failSyncAnimation(errorMessage) {
         setStepStatus('save', 'error');
         setStepStatus('complete', 'error');
-        updateProgressBar(100, 'Sync failed');
-        updateSyncStatus('error', errorMessage || 'Synchronization failed');
+        updateProgressBar(100, 'فشلت المزامنة');
+        updateSyncStatus('error', errorMessage || 'فشلت عملية المزامنة');
         
-        // Add error message display if not already present
+        // إضافة رسالة الخطأ إذا لم تكن موجودة بالفعل
         const container = document.getElementById('sync-status-container');
         const existingAlert = container.querySelector('.alert.alert-danger');
         
         if (container && errorMessage && !existingAlert) {
             container.innerHTML += `
                 <div class="alert alert-danger mt-2">
-                    <h6>Error Details:</h6>
+                    <h6>تفاصيل الخطأ:</h6>
                     <pre class="mb-0">${errorMessage}</pre>
                 </div>
             `;
         }
         
-        // Keep error message visible - don't refresh the page
         console.log('Sync failed:', errorMessage);
     }
     
     function checkSyncStatus() {
-        // ...existing code...
+        // الاستعلام عن حالة المزامنة الحالية من الخادم
+        fetch("{{ url_for('check_sync_status') }}")
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'in_progress') {
+                    // إذا كانت المزامنة جارية، عرض شريط التقدم وخطوات المزامنة
+                    const syncStepsEl = document.getElementById('sync-steps');
+                    if (syncStepsEl) {
+                        syncStepsEl.classList.remove('d-none');
+                    }
+                    
+                    updateSyncStatus('in_progress', data.message || 'جاري المزامنة...');
+                    simulateSyncProgress();
+                    setTimeout(checkSyncResult, 5000);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking sync status:', error);
+            });
     }
     
     function checkSyncResult() {
-        // ...existing code...
+        // التحقق من نتيجة المزامنة بعد فترة من الزمن
+        fetch("{{ url_for('check_sync_status') }}")
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('فشل في الاتصال بالخادم لمعرفة حالة المزامنة');
+                }
+                return response.text().then(text => {
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error('Invalid JSON response:', text);
+                        return { 
+                            status: 'error', 
+                            message: 'استجابة غير صالحة من الخادم',
+                            error: 'تعذر معالجة استجابة الخادم' 
+                        };
+                    }
+                });
+            })
+            .then(data => {
+                if (data.status === 'in_progress') {
+                    // المزامنة لا تزال جارية، الاستمرار في التحقق
+                    setTimeout(checkSyncResult, 5000);
+                } else if (data.status === 'success') {
+                    // المزامنة اكتملت بنجاح
+                    completeSyncAnimation(data);
+                    // تمكين زر المزامنة مرة أخرى
+                    const syncNowBtn = document.getElementById('sync-now-btn');
+                    if (syncNowBtn) {
+                        syncNowBtn.disabled = false;
+                        syncNowBtn.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                    }
+                } else {
+                    // المزامنة فشلت
+                    failSyncAnimation(data.message || data.error || 'فشلت عملية المزامنة');
+                    // تمكين زر المزامنة مرة أخرى
+                    const syncNowBtn = document.getElementById('sync-now-btn');
+                    if (syncNowBtn) {
+                        syncNowBtn.disabled = false;
+                        syncNowBtn.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking sync result:', error);
+                failSyncAnimation('خطأ في الاتصال: ' + error.message);
+                // تمكين زر المزامنة مرة أخرى في حالة الخطأ
+                const syncNowBtn = document.getElementById('sync-now-btn');
+                if (syncNowBtn) {
+                    syncNowBtn.disabled = false;
+                    syncNowBtn.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                }
+            });
     }
     
     function applyColorSettings(settings) {
-        // ...existing code...
+        // تطبيق إعدادات الألوان على واجهة المستخدم
+        if (!settings) return;
+        
+        const colorInputs = ['present_color', 'absent_color', 'vacation_color', 'transfer_color', 'sick_color', 'eid_color'];
+        
+        colorInputs.forEach(colorId => {
+            const input = document.getElementById(colorId);
+            if (input && settings[colorId]) {
+                input.value = settings[colorId];
+            }
+        });
     }
 </script>
 {% endblock %}
