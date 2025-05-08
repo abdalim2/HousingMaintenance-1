@@ -50,15 +50,21 @@ BIOTIME_BACKUP_API_URL = "http://213.210.196.115:8585/att/api/transactionReport/
 # Configure the database
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://neondb_owner:npg_rj0wp9bMRXox@ep-odd-cherry-a5lefri9-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_recycle": 300,
-    "pool_pre_ping": True,
-    "pool_size": 10,
-    "max_overflow": 15,
+    "pool_recycle": 1800,  # تدوير الاتصالات كل 30 دقيقة بدلاً من 5 دقائق
+    "pool_pre_ping": True,  # للتحقق من أن الاتصال لا يزال صالحاً
+    "pool_size": 25,  # زيادة حجم تجمّع الاتصالات
+    "max_overflow": 25,  # زيادة الحد الأقصى للاتصالات الإضافية
+    "pool_timeout": 30,  # زيادة وقت انتظار الاتصال
+    "pool_use_lifo": True,  # استخدام LIFO للحصول على اتصالات أسرع
     "connect_args": {
-        "sslmode": "require"
+        "sslmode": "require",
+        "keepalives": 1,  # تفعيل الاتصالات المستمرة
+        "keepalives_idle": 60,  # الوقت بالثواني قبل إرسال حزمة keepalive
+        "keepalives_interval": 10  # الفاصل الزمني بين محاولات keepalive
     }
 }
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # تعطيل تتبع التعديلات لتحسين الأداء
+app.config["SQLALCHEMY_ECHO"] = False  # تعطيل طباعة استعلامات SQL لتحسين الأداء
 
 # Also set environment variable for other modules to use
 os.environ["DATABASE_URL"] = "postgresql://neondb_owner:npg_rj0wp9bMRXox@ep-odd-cherry-a5lefri9-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
@@ -67,7 +73,7 @@ os.environ["DATABASE_URL"] = "postgresql://neondb_owner:npg_rj0wp9bMRXox@ep-odd-
 init_db(app)
 
 # Import models after db initialization to avoid circular imports
-from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod, Housing, BiometricTerminal
+from models import Department, Employee, AttendanceRecord, SyncLog, MonthPeriod, Housing, BiometricTerminal, EmployeeVacation, EmployeeTransfer
 
 # Import the AI module
 from ai_analytics import BiometricAI
@@ -170,12 +176,11 @@ def index():
     # Calculate attendance percentage
     total_records = present_count + absent_count + vacation_count
     attendance_pct = round((present_count / total_records) * 100, 1) if total_records > 0 else 0
-    
-    # Get total employees count
+      # Get total employees count
     employee_count = Employee.query.count()
     
     # Get active terminals count
-    active_terminals = Terminal.query.count()
+    active_terminals = BiometricTerminal.query.count()
     
     # Get recent records
     recent_records = AttendanceRecord.query.order_by(
@@ -404,6 +409,272 @@ def delete_department():
     
     return redirect(url_for('departments'))
 
+@app.route('/employee_status')
+def employee_status():
+    """Render employee status management page with pagination for better performance"""
+    try:
+        # Get page numbers from query parameters
+        vacation_page = request.args.get('v_page', 1, type=int)
+        transfer_page = request.args.get('t_page', 1, type=int)
+        page_size = 25  # Number of records per page
+        
+        # Get filter parameters
+        employee_id = request.args.get('employee_id', type=int)
+        department_id = request.args.get('department_id', type=int)
+        
+        # Get all active employees for dropdown selection
+        employees = Employee.query.filter_by(active=True).order_by(Employee.name).all()
+        
+        # Get all departments and housings for dropdown selection
+        departments = Department.query.all()
+        housings = Housing.query.all()
+        
+        # Base query for vacations with filtering
+        vacation_query = db.session.query(EmployeeVacation)\
+            .join(Employee, Employee.id == EmployeeVacation.employee_id)\
+            .filter(Employee.active == True)
+            
+        # Base query for transfers with filtering
+        transfer_query = db.session.query(EmployeeTransfer)\
+            .join(Employee, Employee.id == EmployeeTransfer.employee_id)\
+            .filter(Employee.active == True)
+        
+        # Apply filters if provided
+        if employee_id:
+            vacation_query = vacation_query.filter(EmployeeVacation.employee_id == employee_id)
+            transfer_query = transfer_query.filter(EmployeeTransfer.employee_id == employee_id)
+            
+        if department_id:
+            vacation_query = vacation_query.join(
+                Employee, Employee.id == EmployeeVacation.employee_id
+            ).filter(Employee.department_id == department_id)
+            transfer_query = transfer_query.join(
+                Employee, Employee.id == EmployeeTransfer.employee_id
+            ).filter(Employee.department_id == department_id)
+        
+        # Get paginated results
+        vacation_pagination = vacation_query.order_by(
+            EmployeeVacation.start_date.desc()
+        ).paginate(page=vacation_page, per_page=page_size, error_out=False)
+        
+        transfer_pagination = transfer_query.order_by(
+            EmployeeTransfer.start_date.desc()
+        ).paginate(page=transfer_page, per_page=page_size, error_out=False)
+        
+        # Get the records for the current page
+        vacations = vacation_pagination.items
+        transfers = transfer_pagination.items
+        
+        # Get counts for display
+        vacation_count = vacation_query.count()
+        transfer_count = transfer_query.count()
+        
+        return render_template('employee_status.html',
+                              employees=employees,
+                              departments=departments,
+                              housings=housings,
+                              vacations=vacations,
+                              transfers=transfers,
+                              vacation_pagination=vacation_pagination,
+                              transfer_pagination=transfer_pagination,
+                              vacation_count=vacation_count,
+                              transfer_count=transfer_count,
+                              selected_employee_id=employee_id,
+                              selected_department_id=department_id)
+    
+    except Exception as e:
+        logger.error(f"Error loading employee status page: {str(e)}")
+        flash(f'حدث خطأ أثناء تحميل صفحة حالة الموظفين: {str(e)}', 'danger')
+        return redirect(url_for('index'))
+
+@app.route('/save_vacation', methods=['POST'])
+def save_vacation():
+    """Save vacation data"""
+    try:
+        # Get form data
+        vacation_id = request.form.get('id')
+        employee_id = request.form.get('employee_id')
+        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
+        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
+        notes = request.form.get('notes')
+        
+        # Validate date range
+        if end_date < start_date:
+            flash('End date cannot be earlier than start date', 'danger')
+            return redirect(url_for('employee_status'))
+        
+        if vacation_id:
+            # Update existing vacation
+            vacation = EmployeeVacation.query.get(vacation_id)
+            if not vacation:
+                flash('Vacation record not found', 'danger')
+                return redirect(url_for('employee_status'))
+                
+            vacation.employee_id = employee_id
+            vacation.start_date = start_date
+            vacation.end_date = end_date
+            vacation.notes = notes
+            flash('Vacation updated successfully', 'success')
+        else:
+            # Create new vacation
+            vacation = EmployeeVacation(
+                employee_id=employee_id,
+                start_date=start_date,
+                end_date=end_date,
+                notes=notes
+            )
+            db.session.add(vacation)
+            flash('Vacation added successfully', 'success')
+        
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error saving vacation: {str(e)}', 'danger')
+        app.logger.error(f'Error saving vacation: {str(e)}')
+    
+    return redirect(url_for('employee_status'))
+
+@app.route('/save_transfer', methods=['POST'])
+def save_transfer():
+    """Save transfer data"""
+    try:
+        # Get form data
+        transfer_id = request.form.get('id')
+        employee_id = request.form.get('employee_id')
+        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
+        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
+        transfer_type = request.form.get('transfer_type')
+        notes = request.form.get('notes')
+        
+        # Transfer details based on type
+        from_department_id = None
+        to_department_id = None
+        from_housing_id = None
+        to_housing_id = None
+        
+        if transfer_type == 'department':
+            from_department_id = request.form.get('from_department_id') or None
+            to_department_id = request.form.get('to_department_id') or None
+            
+            # Update employee's department if to_department_id is set
+            if to_department_id:
+                employee = Employee.query.get(employee_id)
+                if employee:
+                    employee.department_id = to_department_id
+        else:
+            from_housing_id = request.form.get('from_housing_id') or None
+            to_housing_id = request.form.get('to_housing_id') or None
+            
+            # Update employee's housing if to_housing_id is set
+            if to_housing_id:
+                employee = Employee.query.get(employee_id)
+                if employee:
+                    employee.housing_id = to_housing_id
+        
+        # Validate date range
+        if end_date < start_date:
+            flash('End date cannot be earlier than start date', 'danger')
+            return redirect(url_for('employee_status'))
+        
+        if transfer_id:
+            # Update existing transfer
+            transfer = EmployeeTransfer.query.get(transfer_id)
+            if not transfer:
+                flash('Transfer record not found', 'danger')
+                return redirect(url_for('employee_status'))
+                
+            transfer.employee_id = employee_id
+            transfer.start_date = start_date
+            transfer.end_date = end_date
+            transfer.from_department_id = from_department_id
+            transfer.to_department_id = to_department_id
+            transfer.from_housing_id = from_housing_id
+            transfer.to_housing_id = to_housing_id
+            transfer.notes = notes
+            flash('Transfer updated successfully', 'success')
+        else:
+            # Create new transfer
+            transfer = EmployeeTransfer(
+                employee_id=employee_id,
+                start_date=start_date,
+                end_date=end_date,
+                from_department_id=from_department_id,
+                to_department_id=to_department_id,
+                from_housing_id=from_housing_id,
+                to_housing_id=to_housing_id,
+                notes=notes
+            )
+            db.session.add(transfer)
+            flash('Transfer added successfully', 'success')
+        
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error saving transfer: {str(e)}', 'danger')
+        app.logger.error(f'Error saving transfer: {str(e)}')
+    
+    return redirect(url_for('employee_status'))
+
+@app.route('/get_vacation/<int:id>')
+def get_vacation(id):
+    """Get vacation data as JSON"""
+    vacation = EmployeeVacation.query.get_or_404(id)
+    
+    return jsonify({
+        'id': vacation.id,
+        'employee_id': vacation.employee_id,
+        'start_date': vacation.start_date.strftime('%Y-%m-%d'),
+        'end_date': vacation.end_date.strftime('%Y-%m-%d'),
+        'notes': vacation.notes or ''
+    })
+
+@app.route('/get_transfer/<int:id>')
+def get_transfer(id):
+    """Get transfer data as JSON"""
+    transfer = EmployeeTransfer.query.get_or_404(id)
+    
+    return jsonify({
+        'id': transfer.id,
+        'employee_id': transfer.employee_id,
+        'start_date': transfer.start_date.strftime('%Y-%m-%d'),
+        'end_date': transfer.end_date.strftime('%Y-%m-%d'),
+        'from_department_id': transfer.from_department_id,
+        'to_department_id': transfer.to_department_id,
+        'from_housing_id': transfer.from_housing_id,
+        'to_housing_id': transfer.to_housing_id,
+        'notes': transfer.notes or ''
+    })
+
+@app.route('/delete_vacation/<int:id>')
+def delete_vacation(id):
+    """Delete a vacation record"""
+    try:
+        vacation = EmployeeVacation.query.get_or_404(id)
+        db.session.delete(vacation)
+        db.session.commit()
+        flash('Vacation deleted successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting vacation: {str(e)}', 'danger')
+        app.logger.error(f'Error deleting vacation: {str(e)}')
+    
+    return redirect(url_for('employee_status'))
+
+@app.route('/delete_transfer/<int:id>')
+def delete_transfer(id):
+    """Delete a transfer record"""
+    try:
+        transfer = EmployeeTransfer.query.get_or_404(id)
+        db.session.delete(transfer)
+        db.session.commit()
+        flash('Transfer deleted successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting transfer: {str(e)}', 'danger')
+        app.logger.error(f'Error deleting transfer: {str(e)}')
+    
+    return redirect(url_for('employee_status'))
+
 @app.route('/settings')
 def settings():
     """Render settings page with current BiometricSync settings"""
@@ -507,6 +778,56 @@ def trigger_sync():
     # Redirect back to the previous page or settings
     next_page = request.args.get('next') or request.referrer or url_for('settings')
     return redirect(next_page)
+
+@app.route('/reset_attendance_data', methods=['POST'])
+def reset_attendance_data():
+    """حذف بيانات الدوامات من قاعدة البيانات وإعادة المزامنة"""
+    try:
+        # التحقق من وجود تأكيد من المستخدم
+        confirmation = request.form.get('confirmation')
+        if confirmation != 'CONFIRM_DELETE':
+            flash('يرجى تأكيد الحذف بكتابة CONFIRM_DELETE في مربع التأكيد', 'warning')
+            return redirect(url_for('settings'))
+            
+        # حذف سجلات الدوام من قاعدة البيانات
+        deleted_count = AttendanceRecord.query.delete()
+        
+        # حذف سجلات المزامنة السابقة 
+        sync_logs_count = SyncLog.query.delete()
+        
+        # حفظ التغييرات في قاعدة البيانات
+        db.session.commit()
+        
+        logger.info(f"تم حذف {deleted_count} سجل دوام و {sync_logs_count} سجل مزامنة")
+        flash(f'تم حذف {deleted_count} سجل دوام و {sync_logs_count} سجل مزامنة بنجاح', 'success')
+        
+        # تشغيل المزامنة بعد الحذف إذا طلب المستخدم ذلك
+        if request.form.get('sync_after_delete') == 'on':
+            # تشغيل المزامنة في الخلفية
+            if hasattr(sync_service, 'start_sync_in_background'):
+                result = sync_service.start_sync_in_background(app=app)
+                
+                if result:
+                    flash('تم بدء عملية المزامنة بعد حذف البيانات', 'info')
+                else:
+                    flash('فشلت عملية المزامنة - قد تكون هناك عملية أخرى جارية', 'warning')
+            else:
+                thread = threading.Thread(
+                    target=sync_service.simple_sync_data,
+                    kwargs={'app': app}
+                )
+                thread.daemon = True
+                thread.start()
+                flash('تم بدء عملية المزامنة بعد حذف البيانات', 'info')
+        
+    except Exception as e:
+        # إلغاء التغييرات في حالة حدوث خطأ
+        db.session.rollback()
+        logger.error(f"خطأ أثناء حذف بيانات الدوام: {str(e)}")
+        flash(f'حدث خطأ أثناء حذف البيانات: {str(e)}', 'danger')
+    
+    # إعادة توجيه المستخدم إلى صفحة الإعدادات
+    return redirect(url_for('settings'))
 
 @app.route('/add_housing', methods=['POST'])
 def add_housing():
@@ -843,10 +1164,10 @@ def save_settings():
             session['language'] = language
             logger.info(f"Changed display language to: {language}")
         
-        # UI settings - obtener configuración existente o crear nueva
+        # الحصول على إعدادات واجهة المستخدم الموجودة أو إنشاء إعدادات جديدة
         ui_settings = session.get('ui_settings', {})
         
-        # Actualizar configuraciones de apariencia de la interfaz de usuario
+        # تحديث إعدادات مظهر واجهة المستخدم
         if 'weekend_days[]' in request.form:
             weekend_days = request.form.getlist('weekend_days[]')
             ui_settings['weekend_days'] = weekend_days
@@ -855,7 +1176,7 @@ def save_settings():
             # Default to Friday and Saturday
             ui_settings['weekend_days'] = ['4', '5']  # 4=Friday, 5=Saturday
             
-        # Otras configuraciones UI 
+        # إعدادات واجهة المستخدم الأخرى 
         ui_fields = [
             'default_view', 'present_color', 'absent_color', 
             'vacation_color', 'transfer_color', 'sick_color', 'eid_color'
@@ -865,11 +1186,11 @@ def save_settings():
             if field in request.form:
                 ui_settings[field] = request.form.get(field)
         
-        # Checkboxes adicionales
+        # خانات الاختيار الإضافية
         for setting in ['include_logo', 'include_legend', 'landscape_orientation']:
             ui_settings[setting] = 'on' if setting in request.form else 'off'
         
-        # Guardar configuraciones UI en la sesión
+        # حفظ إعدادات واجهة المستخدم في الجلسة
         session['ui_settings'] = ui_settings
             
         flash('Settings saved successfully!', 'success')
@@ -1506,6 +1827,42 @@ def get_department_statistics(department_id):
     except Exception as e:
         logger.error(f"Error calculating department statistics: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/update_housing_assignments', methods=['GET', 'POST'])
+def update_housing_assignments():
+    """Update employee housing assignments based on biometric terminal usage"""
+    try:
+        # First check how many employees still need housing assignments
+        from models import Employee
+        employees_without_housing = Employee.query.filter(
+            Employee.active == True,
+            (Employee.housing_id == None) | (Employee.housing_id == 0)
+        ).count()
+        
+        # Now run the improved algorithm
+        updated_count = data_processor.update_employee_housing_from_terminals()
+        
+        # Check how many still need housing after the update
+        remaining_without_housing = Employee.query.filter(
+            Employee.active == True,
+            (Employee.housing_id == None) | (Employee.housing_id == 0)
+        ).count()
+        
+        if updated_count > 0:
+            flash(f'تم تحديث {updated_count} موظف وربطهم بالسكن المناسب بناءً على أجهزة البصمة المستخدمة', 'success')
+            flash(f'لا يزال هناك {remaining_without_housing} موظف بدون سكن محدد من أصل {employees_without_housing}', 'info')
+        else:
+            flash('لم يتم العثور على موظفين يحتاجون إلى تحديث السكن أو لا توجد بيانات استخدام كافية', 'info')
+            if employees_without_housing > 0:
+                flash(f'هناك {employees_without_housing} موظف نشط بدون سكن محدد. تأكد من أن جميع أجهزة البصمة مرتبطة بسكنات', 'warning')
+            
+    except Exception as e:
+        logger.error(f"خطأ أثناء تحديث السكن للموظفين: {str(e)}")
+        flash(f'حدث خطأ أثناء تحديث السكن للموظفين: {str(e)}', 'danger')
+    
+    # Redirect back to the previous page or settings
+    next_page = request.args.get('next') or request.referrer or url_for('settings')
+    return redirect(next_page)
 
 # Initialize scheduler when app is ready
 with app.app_context():

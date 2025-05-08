@@ -1,0 +1,507 @@
+{% extends "layout.html" %}
+
+{% block page_title %}{{ t('employee_status') or 'Employee Status Management' }}{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group me-2">
+    <button class="btn btn-sm btn-outline-primary" id="btn-add-vacation" data-bs-toggle="modal" data-bs-target="#vacationModal">
+        <i class="fas fa-plus me-1"></i> {{ t('add_vacation') or 'Add Vacation' }}
+    </button>
+    <button class="btn btn-sm btn-outline-primary" id="btn-add-transfer" data-bs-toggle="modal" data-bs-target="#transferModal">
+        <i class="fas fa-exchange-alt me-1"></i> {{ t('add_transfer') or 'Add Transfer' }}
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filter section -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card bg-dark">
+            <div class="card-header">
+                <h5 class="card-title mb-0">{{ t('filters') or 'Filters' }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" action="{{ url_for('employee_status') }}">
+                    <div class="row">
+                        <div class="col-md-5 mb-2">
+                            <label for="employee_id" class="form-label">{{ t('employee') or 'Employee' }}</label>
+                            <select class="form-select" name="employee_id" id="employee_id">
+                                <option value="">{{ t('all_employees') or 'All Employees' }}</option>
+                                {% for employee in employees %}
+                                <option value="{{ employee.id }}" {% if selected_employee_id == employee.id %}selected{% endif %}>{{ employee.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5 mb-2">
+                            <label for="department_id" class="form-label">{{ t('department') or 'Department' }}</label>
+                            <select class="form-select" name="department_id" id="department_id">
+                                <option value="">{{ t('all_departments') or 'All Departments' }}</option>
+                                {% for department in departments %}
+                                <option value="{{ department.id }}" {% if selected_department_id == department.id %}selected{% endif %}>{{ department.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end mb-2">
+                            <button type="submit" class="btn btn-primary w-100">{{ t('filter') or 'Filter' }}</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Vacation Management Section -->
+    <div class="col-md-6 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-plane-departure me-2"></i>{{ t('employee_vacations') or 'Employee Vacations' }} 
+                    <span class="badge bg-info">{{ vacation_count }}</span>
+                </h5>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#vacationModal">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>{{ t('employee') or 'Employee' }}</th>
+                                <th>{{ t('start_date') or 'Start Date' }}</th>
+                                <th>{{ t('end_date') or 'End Date' }}</th>
+                                <th>{{ t('actions') or 'Actions' }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vacation-table-body">
+                            {% for vacation in vacations %}
+                            <tr>
+                                <td>{{ vacation.employee.name }}</td>
+                                <td>{{ vacation.start_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ vacation.end_date.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-warning btn-edit-vacation" data-id="{{ vacation.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-delete-vacation" data-id="{{ vacation.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center">{{ t('no_vacations') or 'No vacations found' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> 
+                    {{ t('vacation_info') or 'Vacation periods will be marked with "V" in the timesheet.' }}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transfer Management Section -->
+    <div class="col-md-6 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exchange-alt me-2"></i>{{ t('employee_transfers') or 'Employee Transfers' }}
+                </h5>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#transferModal">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>{{ t('employee') or 'Employee' }}</th>
+                                <th>{{ t('start_date') or 'Start Date' }}</th>
+                                <th>{{ t('end_date') or 'End Date' }}</th>
+                                <th>{{ t('from_to') or 'From → To' }}</th>
+                                <th>{{ t('actions') or 'Actions' }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transfer-table-body">
+                            {% for transfer in transfers %}
+                            <tr>
+                                <td>{{ transfer.employee.name }}</td>
+                                <td>{{ transfer.start_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ transfer.end_date.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    {% if transfer.from_department and transfer.to_department %}
+                                        {{ transfer.from_department.name }} → {{ transfer.to_department.name }}
+                                    {% elif transfer.from_housing and transfer.to_housing %}
+                                        {{ transfer.from_housing.name }} → {{ transfer.to_housing.name }}
+                                    {% else %}
+                                        {{ t('transfer_data') or 'Transfer data' }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-warning btn-edit-transfer" data-id="{{ transfer.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-delete-transfer" data-id="{{ transfer.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">{{ t('no_transfers') or 'No transfers found' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> 
+                    {{ t('transfer_info') or 'Transfer periods will be marked with "T" in the timesheet.' }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vacation Modal -->
+<div class="modal fade" id="vacationModal" tabindex="-1" aria-labelledby="vacationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="vacationModalLabel">{{ t('add_vacation') or 'Add Vacation' }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="vacation-form" action="{{ url_for('save_vacation') }}" method="post">
+                    <input type="hidden" id="vacation-id" name="id" value="">
+                    
+                    <div class="mb-3">
+                        <label for="vacation-employee" class="form-label">{{ t('employee') or 'Employee' }}</label>
+                        <select class="form-select" id="vacation-employee" name="employee_id" required>
+                            <option value="" selected disabled>{{ t('select_employee') or 'Select Employee' }}</option>
+                            {% for employee in employees %}
+                                <option value="{{ employee.id }}">{{ employee.name }} ({{ employee.emp_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="vacation-start" class="form-label">{{ t('start_date') or 'Start Date' }}</label>
+                            <input type="date" class="form-control" id="vacation-start" name="start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="vacation-end" class="form-label">{{ t('end_date') or 'End Date' }}</label>
+                            <input type="date" class="form-control" id="vacation-end" name="end_date" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="vacation-notes" class="form-label">{{ t('notes') or 'Notes' }}</label>
+                        <textarea class="form-control" id="vacation-notes" name="notes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') or 'Cancel' }}</button>
+                <button type="button" class="btn btn-primary" id="btn-save-vacation">{{ t('save') or 'Save' }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transfer Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="transferModalLabel">{{ t('add_transfer') or 'Add Transfer' }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="transfer-form" action="{{ url_for('save_transfer') }}" method="post">
+                    <input type="hidden" id="transfer-id" name="id" value="">
+                    
+                    <div class="mb-3">
+                        <label for="transfer-employee" class="form-label">{{ t('employee') or 'Employee' }}</label>
+                        <select class="form-select" id="transfer-employee" name="employee_id" required>
+                            <option value="" selected disabled>{{ t('select_employee') or 'Select Employee' }}</option>
+                            {% for employee in employees %}
+                                <option value="{{ employee.id }}">{{ employee.name }} ({{ employee.emp_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="transfer-start" class="form-label">{{ t('start_date') or 'Start Date' }}</label>
+                            <input type="date" class="form-control" id="transfer-start" name="start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="transfer-end" class="form-label">{{ t('end_date') or 'End Date' }}</label>
+                            <input type="date" class="form-control" id="transfer-end" name="end_date" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Transfer Type -->
+                    <div class="mb-3">
+                        <label class="form-label">{{ t('transfer_type') or 'Transfer Type' }}</label>
+                        <div class="d-flex">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="transfer_type" id="type-department" value="department" checked>
+                                <label class="form-check-label" for="type-department">
+                                    {{ t('department_transfer') or 'Department Transfer' }}
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="transfer_type" id="type-housing" value="housing">
+                                <label class="form-check-label" for="type-housing">
+                                    {{ t('housing_transfer') or 'Housing Transfer' }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Department Transfer -->
+                    <div id="department-transfer" class="transfer-options">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="from-department" class="form-label">{{ t('from_department') or 'From Department' }}</label>
+                                <select class="form-select" id="from-department" name="from_department_id">
+                                    <option value="" selected>{{ t('select_department') or 'Select Department' }}</option>
+                                    {% for dept in departments %}
+                                        <option value="{{ dept.id }}">{{ dept.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="to-department" class="form-label">{{ t('to_department') or 'To Department' }}</label>
+                                <select class="form-select" id="to-department" name="to_department_id">
+                                    <option value="" selected>{{ t('select_department') or 'Select Department' }}</option>
+                                    {% for dept in departments %}
+                                        <option value="{{ dept.id }}">{{ dept.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Housing Transfer -->
+                    <div id="housing-transfer" class="transfer-options d-none">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="from-housing" class="form-label">{{ t('from_housing') or 'From Housing' }}</label>
+                                <select class="form-select" id="from-housing" name="from_housing_id">
+                                    <option value="" selected>{{ t('select_housing') or 'Select Housing' }}</option>
+                                    {% for housing in housings %}
+                                        <option value="{{ housing.id }}">{{ housing.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="to-housing" class="form-label">{{ t('to_housing') or 'To Housing' }}</label>
+                                <select class="form-select" id="to-housing" name="to_housing_id">
+                                    <option value="" selected>{{ t('select_housing') or 'Select Housing' }}</option>
+                                    {% for housing in housings %}
+                                        <option value="{{ housing.id }}">{{ housing.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="transfer-notes" class="form-label">{{ t('notes') or 'Notes' }}</label>
+                        <textarea class="form-control" id="transfer-notes" name="notes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') or 'Cancel' }}</button>
+                <button type="button" class="btn btn-primary" id="btn-save-transfer">{{ t('save') or 'Save' }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize date pickers with today's date
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('vacation-start').value = today;
+        document.getElementById('vacation-end').value = today;
+        document.getElementById('transfer-start').value = today;
+        document.getElementById('transfer-end').value = today;
+        
+        // Toggle between department and housing transfer options
+        const transferTypeRadios = document.querySelectorAll('input[name="transfer_type"]');
+        transferTypeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                const departmentTransfer = document.getElementById('department-transfer');
+                const housingTransfer = document.getElementById('housing-transfer');
+                
+                if (this.value === 'department') {
+                    departmentTransfer.classList.remove('d-none');
+                    housingTransfer.classList.add('d-none');
+                    // Reset housing fields
+                    document.getElementById('from-housing').value = '';
+                    document.getElementById('to-housing').value = '';
+                } else {
+                    departmentTransfer.classList.add('d-none');
+                    housingTransfer.classList.remove('d-none');
+                    // Reset department fields
+                    document.getElementById('from-department').value = '';
+                    document.getElementById('to-department').value = '';
+                }
+            });
+        });
+        
+        // Submit vacation form
+        document.getElementById('btn-save-vacation').addEventListener('click', function() {
+            const form = document.getElementById('vacation-form');
+            if (form.checkValidity()) {
+                form.submit();
+            } else {
+                form.reportValidity();
+            }
+        });
+        
+        // Submit transfer form
+        document.getElementById('btn-save-transfer').addEventListener('click', function() {
+            const form = document.getElementById('transfer-form');
+            if (form.checkValidity()) {
+                // Validate form based on transfer type
+                const transferType = document.querySelector('input[name="transfer_type"]:checked').value;
+                let valid = true;
+                
+                if (transferType === 'department') {
+                    const fromDept = document.getElementById('from-department').value;
+                    const toDept = document.getElementById('to-department').value;
+                    if (!fromDept && !toDept) {
+                        alert("{{ t('please_select_departments') or 'Please select at least one department' }}");
+                        valid = false;
+                    }
+                } else {
+                    const fromHousing = document.getElementById('from-housing').value;
+                    const toHousing = document.getElementById('to-housing').value;
+                    if (!fromHousing && !toHousing) {
+                        alert("{{ t('please_select_housings') or 'Please select at least one housing location' }}");
+                        valid = false;
+                    }
+                }
+                
+                if (valid) {
+                    form.submit();
+                }
+            } else {
+                form.reportValidity();
+            }
+        });
+        
+        // Edit vacation
+        document.querySelectorAll('.btn-edit-vacation').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                fetch(`/get_vacation/${id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('vacation-id').value = data.id;
+                        document.getElementById('vacation-employee').value = data.employee_id;
+                        document.getElementById('vacation-start').value = data.start_date;
+                        document.getElementById('vacation-end').value = data.end_date;
+                        document.getElementById('vacation-notes').value = data.notes;
+                        
+                        // Update modal title
+                        document.getElementById('vacationModalLabel').textContent = "{{ t('edit_vacation') or 'Edit Vacation' }}";
+                        
+                        // Show modal
+                        const modal = new bootstrap.Modal(document.getElementById('vacationModal'));
+                        modal.show();
+                    });
+            });
+        });
+        
+        // Edit transfer
+        document.querySelectorAll('.btn-edit-transfer').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                fetch(`/get_transfer/${id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('transfer-id').value = data.id;
+                        document.getElementById('transfer-employee').value = data.employee_id;
+                        document.getElementById('transfer-start').value = data.start_date;
+                        document.getElementById('transfer-end').value = data.end_date;
+                        document.getElementById('transfer-notes').value = data.notes;
+                        
+                        // Set transfer type based on the data
+                        if (data.from_department_id || data.to_department_id) {
+                            document.getElementById('type-department').checked = true;
+                            document.getElementById('department-transfer').classList.remove('d-none');
+                            document.getElementById('housing-transfer').classList.add('d-none');
+                            
+                            if (data.from_department_id) {
+                                document.getElementById('from-department').value = data.from_department_id;
+                            }
+                            if (data.to_department_id) {
+                                document.getElementById('to-department').value = data.to_department_id;
+                            }
+                        } else {
+                            document.getElementById('type-housing').checked = true;
+                            document.getElementById('department-transfer').classList.add('d-none');
+                            document.getElementById('housing-transfer').classList.remove('d-none');
+                            
+                            if (data.from_housing_id) {
+                                document.getElementById('from-housing').value = data.from_housing_id;
+                            }
+                            if (data.to_housing_id) {
+                                document.getElementById('to-housing').value = data.to_housing_id;
+                            }
+                        }
+                        
+                        // Update modal title
+                        document.getElementById('transferModalLabel').textContent = "{{ t('edit_transfer') or 'Edit Transfer' }}";
+                        
+                        // Show modal
+                        const modal = new bootstrap.Modal(document.getElementById('transferModal'));
+                        modal.show();
+                    });
+            });
+        });
+        
+        // Delete vacation
+        document.querySelectorAll('.btn-delete-vacation').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                if (confirm("{{ t('confirm_delete_vacation') or 'Are you sure you want to delete this vacation?' }}")) {
+                    window.location.href = `/delete_vacation/${id}`;
+                }
+            });
+        });
+        
+        // Delete transfer
+        document.querySelectorAll('.btn-delete-transfer').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                if (confirm("{{ t('confirm_delete_transfer') or 'Are you sure you want to delete this transfer?' }}")) {
+                    window.location.href = `/delete_transfer/${id}`;
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

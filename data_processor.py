@@ -120,6 +120,50 @@ def get_previous_month_days(year, month, num_days=5):
     # Reverse so they're in chronological order
     return previous_days[::-1]
 
+def apply_vacations_and_transfers(attendance_data, employee_id, start_date, end_date):
+    """
+    Apply vacation and transfer statuses to employee attendance data - Optimized with caching
+    
+    Args:
+        attendance_data: List of attendance data dictionaries
+        employee_id: Employee ID
+        start_date: Start date for the timesheet
+        end_date: End date for the timesheet
+    
+    Returns:
+        Updated attendance data with vacation and transfer statuses
+    """
+    # Import cache manager
+    from cache_manager import get_employee_vacations, get_employee_transfers
+    
+    # Get vacations and transfers using cache
+    vacations = get_employee_vacations(employee_id, start_date, end_date)
+    transfers = get_employee_transfers(employee_id, start_date, end_date)
+    
+    # Apply vacation statuses - process by date ranges rather than generating all dates
+    for vacation in vacations:
+        v_start = max(vacation.start_date, start_date)
+        v_end = min(vacation.end_date, end_date)
+        
+        # Find applicable dates in the attendance data that fall within this vacation
+        for day_data in attendance_data:
+            day_date = day_data['date']
+            if v_start <= day_date <= v_end and (day_data['status'] == 'A' or not day_data['status']):
+                day_data['status'] = 'V'
+    
+    # Apply transfer statuses
+    for transfer in transfers:
+        t_start = max(transfer.start_date, start_date)
+        t_end = min(transfer.end_date, end_date)
+        
+        # Find applicable dates in the attendance data that fall within this transfer
+        for day_data in attendance_data:
+            day_date = day_data['date']
+            if t_start <= day_date <= t_end:
+                day_data['status'] = 'T'
+    
+    return attendance_data
+
 def generate_timesheet(year, month, department_id=None, custom_start_date=None, custom_end_date=None, housing_id=None):
     """
     Generate timesheet data for the specified month and department/housing
@@ -222,14 +266,30 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
         # تتبع أجهزة البصمة المستخدمة لكل موظف
         employee_terminals = defaultdict(set)
         
+        # تتبع السكنات المختلفة المستخدمة من قبل الموظفين في الأيام المختلفة
+        employee_daily_housing = defaultdict(lambda: defaultdict(set))
+        
         for record in attendance_records:
             attendance_by_employee[record.employee_id][record.date] = record
             
             # جمع معلومات عن أجهزة البصمة المستخدمة لكل موظف
-            if record.terminal_alias_in:
+            # وتطبيق القاعدة 1 و 2: إذا تطابقت أجهزة بصمة الدخول والخروج أو اختلفت، نعطي الأولوية لبصمة الدخول
+            housing_id_in = None
+            housing_id_out = None
+            
+            if record.terminal_alias_in and record.terminal_alias_in in terminal_to_housing:
                 employee_terminals[record.employee_id].add(record.terminal_alias_in)
-            if record.terminal_alias_out:
+                housing_id_in = terminal_to_housing[record.terminal_alias_in]
+                # أضف السكن المرتبط ببصمة الدخول إلى مجموعة السكنات لهذا اليوم
+                if housing_id_in:
+                    employee_daily_housing[record.employee_id][record.date].add(housing_id_in)
+                
+            if record.terminal_alias_out and record.terminal_alias_out in terminal_to_housing:
                 employee_terminals[record.employee_id].add(record.terminal_alias_out)
+                housing_id_out = terminal_to_housing[record.terminal_alias_out]
+                # أضف السكن المرتبط ببصمة الخروج إلى مجموعة السكنات لهذا اليوم فقط إذا كان مختلفًا
+                if housing_id_out and housing_id_out != housing_id_in:
+                    employee_daily_housing[record.employee_id][record.date].add(housing_id_out)
             
         # Get weekend days from user settings
         weekend_days = []
@@ -241,18 +301,28 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             
         logger.info(f"Using weekend days: {weekend_days}")
         
-        # Build employee rows for the timesheet
-        employee_rows = []
+        # قائمة لتخزين جميع صفوف الموظفين، بما في ذلك الموظفين المكررين بسكنات مختلفة
+        all_employee_rows = []
+        
+        # تتبع الموظفين الذين تمت إضافتهم بالفعل إلى صفوف الموظفين
+        processed_employee_ids = set()
         
         for employee in employees:
             attendance_data = []
             
-            # For each date in the range, get the attendance status
+            # تتبع جميع السكنات التي استخدمها الموظف خلال الفترة
+            all_housing_used = set()
+              # For each date in the range, get the attendance status
             for day in dates:
                 record = attendance_by_employee.get(employee.id, {}).get(day)
                 
                 if record:
                     status = record.attendance_status
+                    
+                    # جمع السكنات المستخدمة في هذا اليوم
+                    daily_housings = employee_daily_housing[employee.id].get(day, set())
+                    if daily_housings:
+                        all_housing_used.update(daily_housings)
                 else:
                     # If no record, determine if it's a weekend or future date
                     if day.weekday() in weekend_days:  # Using the weekend days from settings
@@ -271,6 +341,8 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                     'record': record,
                     'is_weekend': is_weekend  # Flag for weekend styling
                 })
+              # Apply vacations and transfers to attendance data
+            attendance_data = apply_vacations_and_transfers(attendance_data, employee.id, start_date, end_date)
             
             # Get department name
             dept_name = ''
@@ -288,19 +360,31 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                 housing = Housing.query.get(employee_housing_id)
                 if housing:
                     housing_name = housing.name
+                    # أضف سكن الموظف إلى قائمة السكنات المستخدمة
+                    all_housing_used.add(employee_housing_id)
             
             # جمع معلومات عن أجهزة البصمة المستخدمة
             devices = employee_terminals.get(employee.id, set())
             terminal_alias_in = None
             
-            # إذا لم يكن للموظف سكن محدد، حاول تحديد السكن من أجهزة البصمة
+            # إذا لم يكن للموظف سكن محدد، حاول تحديد السكن من أجهزة البصمة المستخدمة بتطبيق القواعد
             if not employee_housing_id and devices:
-                # محاولة العثور على أول جهاز بصمة مرتبط بسكن
-                for device in sorted(devices):  # ترتيب الأجهزة أبجدياً للحصول على نتائج متسقة
+                # Count terminal usage by housing
+                housing_usage = defaultdict(int)
+                
+                # محاولة تحديد السكن بناءً على تكرار استخدام الأجهزة
+                for device in devices:
                     if device in terminal_to_housing:
-                        employee_housing_id = terminal_to_housing[device]
-                        housing_name = terminal_to_housing.get(f"{device}_name", "")
-                        break
+                        housing_id = terminal_to_housing[device]
+                        housing_usage[housing_id] += 1
+                
+                # If we have housing usage data, use the most frequent one
+                if housing_usage:
+                    most_used_housing_id = max(housing_usage.items(), key=lambda x: x[1])[0]
+                    employee_housing_id = most_used_housing_id
+                    housing_name = housing_names.get(most_used_housing_id, "")
+                    # أضف السكن الأكثر استخدامًا إلى قائمة السكنات المستخدمة
+                    all_housing_used.add(most_used_housing_id)
             
             # استخدام أول جهاز بصمة كجهاز افتراضي للموظف إذا كان موجوداً
             if devices:
@@ -317,10 +401,16 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             for day_data in attendance_data:
                 record = day_data.get('record')
                 if record:
-                    total_work_hours += record.work_hours or 0
-                    total_overtime_hours += record.overtime_hours or 0
+                    # حساب ساعات العمل العادية (بحد أقصى 8 ساعات في اليوم) والساعات الإضافية
+                    total_hours = record.work_hours + record.overtime_hours
+                    regular_hours = min(8, total_hours)  # ساعات العمل العادية بحد أقصى 8 ساعات
+                    overtime = total_hours - regular_hours if total_hours > 8 else 0  # الساعات الإضافية فوق ال 8 ساعات
+                    
+                    total_work_hours += regular_hours
+                    total_overtime_hours += overtime
             
-            employee_rows.append({
+            # إضافة الموظف بالسكن الرئيسي أولاً
+            all_employee_rows.append({
                 'id': employee.id,
                 'emp_code': employee.emp_code,
                 'name': employee.name,
@@ -333,11 +423,46 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                 'terminal_alias_in': terminal_alias_in,  # جهاز البصمة الأساسي
                 'devices': list(devices),  # قائمة بجميع أجهزة البصمة المستخدمة
                 'total_work_hours': total_work_hours,  # إجمالي ساعات العمل
-                'total_overtime_hours': total_overtime_hours  # إجمالي الساعات الإضافية
+                'total_overtime_hours': total_overtime_hours,  # إجمالي الساعات الإضافية
+                'is_primary': True  # علامة للإشارة إلى أنه السكن الرئيسي للموظف
             })
+            
+            # إضافة الموظف إلى قائمة المعالجة
+            processed_employee_ids.add(employee.id)
+            
+            # قاعدة 3: إظهار الموظف في السكنات الأخرى التي بصم فيها
+            # إنشاء نسخة من الموظف لكل سكن إضافي استخدمه
+            for housing_id in all_housing_used:
+                # تخطي السكن الرئيسي الذي تمت إضافته بالفعل
+                if housing_id == employee_housing_id:
+                    continue
+                
+                # الحصول على اسم السكن
+                secondary_housing_name = housing_names.get(housing_id, "Unknown Housing")
+                
+                # إنشاء نسخة من بيانات الموظف مع تحديد السكن الثانوي
+                all_employee_rows.append({
+                    'id': employee.id,
+                    'emp_code': employee.emp_code,
+                    'name': employee.name,
+                    'name_ar': employee.name_ar,
+                    'profession': employee.profession,
+                    'department': dept_name,
+                    'housing': secondary_housing_name,  # اسم السكن الثانوي
+                    'housing_id': housing_id,  # معرف السكن الثانوي
+                    'attendance': attendance_data,
+                    'terminal_alias_in': terminal_alias_in,  # جهاز البصمة الأساسي
+                    'devices': list(devices),  # قائمة بجميع أجهزة البصمة المستخدمة
+                    'total_work_hours': total_work_hours,  # إجمالي ساعات العمل
+                    'total_overtime_hours': total_overtime_hours,  # إجمالي الساعات الإضافية
+                    'is_primary': False  # علامة للإشارة إلى أنه سكن ثانوي للموظف
+                })
+        
+        # استخدام القائمة الجديدة التي تتضمن الموظفين المكررين بالسكنات المختلفة
+        employee_rows = all_employee_rows
         
         # ترتيب الموظفين حسب السكن ثم حسب الاسم
-        employee_rows.sort(key=lambda x: (x.get('housing') or 'Unknown Housing', x.get('name') or ''))
+        employee_rows.sort(key=lambda x: (x.get('housing') or 'Unknown Housing', x.get('name') or '', not x.get('is_primary', False)))
         
         # Get month period data if available
         from models import MonthPeriod
@@ -381,7 +506,8 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             'month_name': get_month_name(month),
             'dates': dates,
             'employees': grouped_employees,  # استخدام القائمة المجمعة حسب السكن
-            'total_employees': len(employee_rows),
+            'total_employees': len(employees),  # عدد الموظفين الفريدين (بدون التكرار)
+            'total_rows': len(employee_rows),  # العدد الإجمالي للصفوف بما فيها المكررة
             'housing_groups': housing_groups,  # تضمين معلومات التجميع حسب السكن
             'start_date': start_date,
             'end_date': end_date,
@@ -523,3 +649,160 @@ def get_housing_stats():
     except Exception as e:
         logger.error(f"Error getting housing stats: {str(e)}")
         return []
+
+def update_employee_housing_from_terminals():
+    """
+    Update employee housing assignments based on their biometric terminal usage patterns.
+    This function analyzes all attendance records and updates employee housing assignments
+    based on the following rules:
+    1. If check-in and check-out terminals match for a day, use that terminal's housing
+    2. If check-in and check-out terminals differ, prioritize the check-in terminal
+    
+    Improved version:
+    - Looks back 60 days instead of 30 
+    - Reduces minimum terminal usage to 2 instead of 3
+    - Filters out common terminals that don't represent housing locations
+    - Improved logging for better troubleshooting
+    """
+    # Import here to avoid circular imports
+    from models import Employee, AttendanceRecord, BiometricTerminal, Housing
+    from database import db
+    import logging
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+    
+    try:
+        logger = logging.getLogger(__name__)
+        logger.info("Starting improved automatic housing assignment based on terminal usage")
+        
+        # Get all active employees without housing assignments
+        employees_without_housing = Employee.query.filter(
+            Employee.active == True,
+            (Employee.housing_id == None) | (Employee.housing_id == 0)
+        ).all()
+        
+        logger.info(f"Found {len(employees_without_housing)} active employees without housing assignments")
+        
+        # Get the mapping of terminals to housing
+        terminal_to_housing = {}
+        terminals = BiometricTerminal.query.filter(BiometricTerminal.housing_id != None).all()
+          # Common terminals that don't represent housing (security checkpoints and office locations)
+        common_terminals = [
+            "SECURITY-oldwoodcamp",
+            "SECURITY-oldgypcamp",
+            "HeadOffice1",
+            "HeadOffice2",
+            "SECURITY-MAIN",
+            "SECURITY-GATE", 
+            "SECURITY-B",
+            "SECURITY-C",
+            "SECURITY"
+        ]
+        
+        terminal_count = 0
+        for terminal in terminals:
+            if terminal.terminal_alias not in common_terminals:
+                terminal_to_housing[terminal.terminal_alias] = terminal.housing_id
+                terminal_count += 1
+        
+        logger.info(f"Loaded {terminal_count} biometric terminals mapped to housing locations")
+        
+        # Check recent attendance records (last 60 days for more data points)
+        today = datetime.now().date()
+        two_months_ago = today - timedelta(days=60)
+        
+        logger.info(f"Analyzing attendance records from {two_months_ago} to {today}")
+        
+        # Process each employee without housing
+        updated_count = 0
+        no_records_count = 0
+        insufficient_usage_count = 0
+        
+        for employee in employees_without_housing:
+            # Get employee's attendance records for the last two months
+            records = AttendanceRecord.query.filter(
+                AttendanceRecord.employee_id == employee.id,
+                AttendanceRecord.date >= two_months_ago
+            ).order_by(AttendanceRecord.date.desc()).all()
+            
+            if not records:
+                no_records_count += 1
+                continue
+                
+            # Group records by date to analyze daily terminal usage
+            records_by_date = defaultdict(list)
+            for record in records:
+                records_by_date[record.date].append(record)
+                
+            # Count terminal usage by housing with priority rules
+            housing_usage = defaultdict(int)
+            check_in_terminals_used = set()
+            
+            # Apply the rules for each day's attendance records
+            for date, day_records in records_by_date.items():
+                # Keep track of which terminals were used for check-in on this date
+                # to avoid double counting if an employee has multiple check-ins at the same terminal
+                daily_housing_counted = set()
+                
+                for record in day_records:
+                    # Rule 1 & 2: If check-in and check-out terminals match or differ, prioritize check-in
+                    if record.terminal_alias_in and record.terminal_alias_in in terminal_to_housing:
+                        # Always prioritize the check-in terminal
+                        housing_id = terminal_to_housing[record.terminal_alias_in]
+                        
+                        # Only count once per day for the same housing
+                        if housing_id not in daily_housing_counted:
+                            housing_usage[housing_id] += 1
+                            daily_housing_counted.add(housing_id)
+                            
+                        check_in_terminals_used.add(record.terminal_alias_in)
+                        
+                    # Only consider check-out terminal if it's different & we don't have a check-in terminal
+                    elif record.terminal_alias_out and record.terminal_alias_out in terminal_to_housing:
+                        housing_id = terminal_to_housing[record.terminal_alias_out]
+                        
+                        # Only count once per day for the same housing
+                        if housing_id not in daily_housing_counted:
+                            housing_usage[housing_id] += 1
+                            daily_housing_counted.add(housing_id)
+            
+            # If employee has used terminals, assign to most frequently used housing
+            if housing_usage:
+                # Find the housing with maximum usage
+                sorted_usage = sorted(housing_usage.items(), key=lambda x: x[1], reverse=True)
+                most_used_housing_id = sorted_usage[0][0]
+                usage_count = sorted_usage[0][1]
+                
+                # Log the terminals this employee used for check-in
+                logger.info(f"Employee {employee.emp_code} ({employee.name}) used terminals: {', '.join(check_in_terminals_used)}")
+                logger.info(f"Housing usage counts: {dict(sorted_usage)}")
+                
+                # Update employee's housing if they used this housing's terminals at least 2 times
+                # (reduced from 3 to catch more employees)
+                if usage_count >= 2:
+                    housing = Housing.query.get(most_used_housing_id)
+                    if housing:
+                        employee.housing_id = most_used_housing_id
+                        updated_count += 1
+                        logger.info(f"Updated employee {employee.emp_code} ({employee.name}) housing to {housing.name} based on {usage_count} terminal usages")
+                else:
+                    insufficient_usage_count += 1
+                    logger.info(f"Employee {employee.emp_code} doesn't have enough terminal usage (only {usage_count})")
+            else:
+                logger.info(f"No housing-connected terminals found for employee {employee.emp_code}")
+        
+        # Save all changes
+        if updated_count > 0:
+            db.session.commit()
+            logger.info(f"Updated housing for {updated_count} employees")
+            logger.info(f"Employees with no records: {no_records_count}")
+            logger.info(f"Employees with insufficient terminal usage: {insufficient_usage_count}")
+        else:
+            logger.info(f"No employees needed housing updates. {no_records_count} had no records and {insufficient_usage_count} had insufficient usage.")
+            
+        return updated_count
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating employee housing: {str(e)}")
+        return 0

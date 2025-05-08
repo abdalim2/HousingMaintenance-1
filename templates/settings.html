@@ -315,6 +315,26 @@
                 </form>
             </div>
         </div>
+
+        <div class="card bg-dark mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">ربط الموظفين بالسكن</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> يمكنك تحديث معلومات سكن الموظفين تلقائياً بناءً على أجهزة البصمة التي يستخدمونها.
+                    سيقوم النظام بتحليل سجلات الحضور ومعرفة أجهزة البصمة المستخدمة لكل موظف وربطه بالسكن المناسب.
+                </div>
+                
+                <form action="{{ url_for('update_housing_assignments') }}" method="post">
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-link"></i> ربط الموظفين بالسكن تلقائياً
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -508,6 +528,42 @@
             </div>
             <div class="card-footer text-center">
                 <button class="btn btn-sm btn-dark" id="view-full-history">View Full Sync History</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header">
+                <h5 class="card-title mb-0 text-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>مسح بيانات الدوامات وإعادة المزامنة
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle me-2"></i>تحذير!</h5>
+                    <p>هذه العملية ستؤدي إلى حذف جميع سجلات الدوامات وسجلات المزامنة من قاعدة البيانات. لا يمكن التراجع عن هذه العملية بعد تنفيذها!</p>
+                </div>
+                
+                <form action="{{ url_for('reset_attendance_data') }}" method="post">
+                    <div class="mb-3">
+                        <label for="confirmation" class="form-label">لتأكيد الحذف، اكتب "CONFIRM_DELETE" في الحقل أدناه:</label>
+                        <input type="text" class="form-control" id="confirmation" name="confirmation" required placeholder="اكتب CONFIRM_DELETE للتأكيد">
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="sync_after_delete" name="sync_after_delete">
+                        <label class="form-check-label" for="sync_after_delete">إعادة مزامنة البيانات بعد الحذف مباشرةً</label>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-danger" onclick="return confirmDataDelete()">
+                            <i class="fas fa-trash-alt me-2"></i>حذف البيانات وإعادة المزامنة
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -813,14 +869,14 @@
                             // فشلت المزامنة
                             failSyncAnimation(data.message || 'فشل في بدء المزامنة');
                             this.disabled = false;
-                            this.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                            this.innerHTML = "<i class=\"fas fa-sync-alt\"></i> {{ t('sync_now') }}";
                         }
                     })
                     .catch(error => {
                         console.error('Sync error:', error);
                         failSyncAnimation(error.message);
                         this.disabled = false;
-                        this.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                        this.innerHTML = "<i class=\"fas fa-sync-alt\"></i> {{ t('sync_now') }}";
                     });
                 }
             });
@@ -1291,7 +1347,7 @@
                     const syncNowBtn = document.getElementById('sync-now-btn');
                     if (syncNowBtn) {
                         syncNowBtn.disabled = false;
-                        syncNowBtn.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                        syncNowBtn.innerHTML = "<i class=\"fas fa-sync-alt\"></i> {{ t('sync_now') }}";
                     }
                 } else {
                     // المزامنة فشلت
@@ -1300,7 +1356,7 @@
                     const syncNowBtn = document.getElementById('sync-now-btn');
                     if (syncNowBtn) {
                         syncNowBtn.disabled = false;
-                        syncNowBtn.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                        syncNowBtn.innerHTML = "<i class=\"fas fa-sync-alt\"></i> {{ t('sync_now') }}";
                     }
                 }
             })
@@ -1311,7 +1367,7 @@
                 const syncNowBtn = document.getElementById('sync-now-btn');
                 if (syncNowBtn) {
                     syncNowBtn.disabled = false;
-                    syncNowBtn.innerHTML = '<i class="fas fa-sync-alt"></i> {{ t('sync_now') }}';
+                    syncNowBtn.innerHTML = "<i class=\"fas fa-sync-alt\"></i> {{ t('sync_now') }}";
                 }
             });
     }
@@ -1328,6 +1384,17 @@
                 input.value = settings[colorId];
             }
         });
+    }
+
+    // وظيفة تأكيد حذف بيانات الدوام
+    function confirmDataDelete() {
+        const confirmText = document.getElementById('confirmation').value;
+        if (confirmText !== 'CONFIRM_DELETE') {
+            alert('يرجى كتابة "CONFIRM_DELETE" بالضبط للتأكيد');
+            return false;
+        }
+        
+        return confirm('هل أنت متأكد من حذف جميع سجلات الدوام وسجلات المزامنة؟ هذا الإجراء لا يمكن التراجع عنه!');
     }
 </script>
 {% endblock %}

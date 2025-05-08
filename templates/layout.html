@@ -38,11 +38,16 @@
                                 <i class="fas fa-building me-2"></i>
                                 {{ t('departments') }}
                             </a>
-                        </li>
-                        <li class="nav-item">
+                        </li>                        <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path.startswith('/settings') else '' }}" href="{{ url_for('settings') }}">
                                 <i class="fas fa-cog me-2"></i>
                                 {{ t('settings') }}
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/employee_status') else '' }}" href="{{ url_for('employee_status') }}">
+                                <i class="fas fa-user-clock me-2"></i>
+                                {{ t('employee_status') or 'Employee Status' }}
                             </a>
                         </li>
                     </ul>
