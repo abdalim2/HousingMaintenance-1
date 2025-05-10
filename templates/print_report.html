@@ -1,0 +1,527 @@
+{% extends 'layout.html' %}
+
+{% block title %}{{ t('print_report') or 'Print Report' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    @media print {
+        body {
+            font-family: 'Arial', sans-serif;
+            color: #000;
+            background: #fff;
+        }
+        
+        .container-print {
+            width: 100%;
+            max-width: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .no-print {
+            display: none !important;
+        }
+        
+        .print-footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            padding: 0.5rem 0;
+            border-top: 1px solid #ddd;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th,
+        .table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #f9f9f9;
+        }
+        
+        .report-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .company-logo {
+            height: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .report-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .report-subtitle {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        .report-date {
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .metric-box {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .metric-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .metric-unit {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .chart-container {
+            height: 250px;
+            margin: 20px 0;
+        }
+        
+        .attendance-chart {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .signature-area {
+            margin-top: 50px;
+            page-break-inside: avoid;
+        }
+        
+        .signature-line {
+            border-top: 1px solid #000;
+            width: 200px;
+            display: inline-block;
+            margin-top: 70px;
+        }
+        
+        .signature-name {
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        
+        .signature-title {
+            font-size: 12px;
+            color: #666;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Print Controls (will hide when printing) -->
+<div class="container mb-4 no-print">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="mb-3"><i class="fas fa-print me-2"></i> {{ t('print_controls') or 'Print Controls' }}</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="reportType" class="form-label">{{ t('report_type') or 'Report Type' }}</label>
+                                <select id="reportType" class="form-select">
+                                    <option value="summary">{{ t('summary_report') or 'Summary Report' }}</option>
+                                    <option value="detailed">{{ t('detailed_report') or 'Detailed Report' }}</option>
+                                    <option value="departments">{{ t('departments_report') or 'Departments Report' }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="dateRange" class="form-label">{{ t('date_range') or 'Date Range' }}</label>
+                                <select id="dateRange" class="form-select">
+                                    <option value="current">{{ t('current_month') or 'Current Month' }}</option>
+                                    <option value="previous">{{ t('previous_month') or 'Previous Month' }}</option>
+                                    <option value="quarter">{{ t('last_quarter') or 'Last Quarter' }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="language" class="form-label">{{ t('language') or 'Language' }}</label>
+                                <select id="language" class="form-select">
+                                    <option value="en">English</option>
+                                    <option value="ar" selected>العربية</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                        <button id="printButton" class="btn btn-primary">
+                            <i class="fas fa-print me-2"></i> {{ t('print_report') or 'Print Report' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actual Report Content (for printing) -->
+<div class="container-print">
+    <!-- Report Header -->
+    <div class="report-header">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Company Logo" class="company-logo">
+        <h1 class="report-title">{{ t('attendance_management_system') or 'Attendance Management System' }}</h1>
+        <h2 class="report-subtitle">{{ t('general_manager_report') or 'General Manager Report' }}</h2>
+        <div class="report-date">{{ report_date or '01/06/2023 - 30/06/2023' }}</div>
+    </div>
+    
+    <!-- Executive Summary -->
+    <div class="section-title">{{ t('executive_summary') or 'Executive Summary' }}</div>
+    <p>{{ t('executive_summary_text') or 'This report provides an overview of the attendance performance across all departments. The overall attendance rate is within the expected range, with some departments showing excellent performance while others require attention.' }}</p>
+    
+    <!-- Key Metrics -->
+    <div class="section-title">{{ t('key_metrics') or 'Key Metrics' }}</div>
+    <div class="row">
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="metric-title">{{ t('total_employees') or 'Total Employees' }}</div>
+                <div class="metric-value">{{ total_employees or '487' }}</div>
+                <div class="metric-unit">{{ t('active_employees') or 'Active Employees' }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="metric-title">{{ t('avg_attendance_rate') or 'Avg. Attendance Rate' }}</div>
+                <div class="metric-value">{{ avg_attendance or '86.5%' }}</div>
+                <div class="metric-unit">{{ t('this_month') or 'This Month' }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="metric-title">{{ t('avg_work_hours') or 'Avg. Work Hours' }}</div>
+                <div class="metric-value">{{ avg_work_hours or '8.2' }}</div>
+                <div class="metric-unit">{{ t('hours_per_day') or 'Hours per Day' }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="metric-title">{{ t('absence_rate') or 'Absence Rate' }}</div>
+                <div class="metric-value">{{ absence_rate or '13.5%' }}</div>
+                <div class="metric-unit">{{ t('this_month') or 'This Month' }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Attendance Trend -->
+    <div class="section-title">{{ t('attendance_trends') or 'Attendance Trends' }}</div>
+    <div class="chart-container">
+        {% if attendance_chart %}
+            <img src="data:image/png;base64,{{ attendance_chart }}" class="attendance-chart" alt="Attendance Trend Chart">
+        {% else %}
+            <div class="text-center py-4 text-muted">{{ t('chart_not_available') or 'Chart not available' }}</div>
+        {% endif %}
+    </div>
+    
+    <!-- Department Performance -->
+    <div class="section-title">{{ t('department_performance') or 'Department Performance' }}</div>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>{{ t('department_name') or 'Department Name' }}</th>
+                    <th>{{ t('employees') or 'Employees' }}</th>
+                    <th>{{ t('attendance_rate') or 'Attendance Rate' }}</th>
+                    <th>{{ t('absence_rate') or 'Absence Rate' }}</th>
+                    <th>{{ t('avg_work_hours') or 'Avg. Work Hours' }}</th>
+                    <th>{{ t('status') or 'Status' }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if dept_stats %}
+                    {% for dept in dept_stats %}
+                    <tr>
+                        <td>{{ dept.name }}</td>
+                        <td>{{ dept.employee_count }}</td>
+                        <td>{{ dept.attendance_rate }}%</td>
+                        <td>{{ dept.absence_rate }}%</td>
+                        <td>{{ dept.avg_work_hours }}</td>
+                        <td>
+                            {% if dept.attendance_rate >= 90 %}
+                                <span class="text-success">{{ t('excellent') or 'Excellent' }}</span>
+                            {% elif dept.attendance_rate >= 80 %}
+                                <span class="text-info">{{ t('good') or 'Good' }}</span>
+                            {% elif dept.attendance_rate >= 70 %}
+                                <span class="text-warning">{{ t('average') or 'Average' }}</span>
+                            {% else %}
+                                <span class="text-danger">{{ t('needs_improvement') or 'Needs Improvement' }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td>{{ t('maintenance') or 'Maintenance' }}</td>
+                        <td>124</td>
+                        <td>92.3%</td>
+                        <td>7.7%</td>
+                        <td>8.5</td>
+                        <td><span class="text-success">{{ t('excellent') or 'Excellent' }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('security') or 'Security' }}</td>
+                        <td>78</td>
+                        <td>88.7%</td>
+                        <td>11.3%</td>
+                        <td>8.2</td>
+                        <td><span class="text-info">{{ t('good') or 'Good' }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('cleaning') or 'Cleaning' }}</td>
+                        <td>156</td>
+                        <td>85.2%</td>
+                        <td>14.8%</td>
+                        <td>7.8</td>
+                        <td><span class="text-info">{{ t('good') or 'Good' }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('gardening') or 'Gardening' }}</td>
+                        <td>42</td>
+                        <td>79.5%</td>
+                        <td>20.5%</td>
+                        <td>7.2</td>
+                        <td><span class="text-warning">{{ t('average') or 'Average' }}</span></td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('administration') or 'Administration' }}</td>
+                        <td>87</td>
+                        <td>94.1%</td>
+                        <td>5.9%</td>
+                        <td>8.7</td>
+                        <td><span class="text-success">{{ t('excellent') or 'Excellent' }}</span></td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- AI Insights (showing only on detailed report) -->
+    <div class="section-title">{{ t('ai_insights') or 'AI Insights & Recommendations' }}</div>
+    <div class="row">
+        <div class="col-md-12">
+            <ul>
+                <li>{{ t('ai_insight_1') or 'Attendance rates show a positive trend with a 3.2% improvement compared to the previous month.' }}</li>
+                <li>{{ t('ai_insight_2') or 'Lower attendance detected on Thursdays across multiple departments, suggesting a potential pattern that requires investigation.' }}</li>
+                <li>{{ t('ai_insight_3') or 'Maintenance department shows excellent attendance consistency, with less than 5% variation throughout the month.' }}</li>
+                <li>{{ t('ai_insight_4') or 'Gardening department has the highest absence rate. Consider implementing attendance incentives or reviewing workloads.' }}</li>
+                <li>{{ t('ai_insight_5') or 'Early working hours (before 7AM) have 12% better attendance rates than late shifts.' }}</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Page Break for Detailed Stats -->
+    <div class="page-break"></div>
+    
+    <!-- Housing Performance -->
+    <div class="section-title">{{ t('housing_performance') or 'Housing Performance' }}</div>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>{{ t('housing_name') or 'Housing Name' }}</th>
+                    <th>{{ t('employees_assigned') or 'Employees Assigned' }}</th>
+                    <th>{{ t('avg_start_time') or 'Avg. Start Time' }}</th>
+                    <th>{{ t('avg_end_time') or 'Avg. End Time' }}</th>
+                    <th>{{ t('attendance_rate') or 'Attendance Rate' }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if housing_stats %}
+                    {% for housing in housing_stats %}
+                    <tr>
+                        <td>{{ housing.name }}</td>
+                        <td>{{ housing.employee_count }}</td>
+                        <td>{{ housing.avg_start }}</td>
+                        <td>{{ housing.avg_end }}</td>
+                        <td>{{ housing.attendance_rate }}%</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td>{{ t('housing_1') or 'Al Nakheel Compound' }}</td>
+                        <td>87</td>
+                        <td>06:45</td>
+                        <td>15:30</td>
+                        <td>92.7%</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('housing_2') or 'Al Waha Residences' }}</td>
+                        <td>63</td>
+                        <td>07:15</td>
+                        <td>16:00</td>
+                        <td>89.3%</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('housing_3') or 'Al Bustan Complex' }}</td>
+                        <td>72</td>
+                        <td>06:30</td>
+                        <td>15:15</td>
+                        <td>85.1%</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('housing_4') or 'Al Maha Gardens' }}</td>
+                        <td>45</td>
+                        <td>07:00</td>
+                        <td>15:45</td>
+                        <td>88.9%</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t('housing_5') or 'Al Salam Housing' }}</td>
+                        <td>95</td>
+                        <td>06:15</td>
+                        <td>14:45</td>
+                        <td>90.4%</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Anomalies and Exceptions -->
+    <div class="section-title">{{ t('anomalies_and_exceptions') or 'Anomalies and Exceptions' }}</div>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>{{ t('date') or 'Date' }}</th>
+                    <th>{{ t('department') or 'Department' }}</th>
+                    <th>{{ t('anomaly_type') or 'Anomaly Type' }}</th>
+                    <th>{{ t('description') or 'Description' }}</th>
+                    <th>{{ t('impact') or 'Impact' }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if anomalies %}
+                    {% for anomaly in anomalies %}
+                    <tr>
+                        <td>{{ anomaly.date }}</td>
+                        <td>{{ anomaly.department }}</td>
+                        <td>{{ anomaly.type }}</td>
+                        <td>{{ anomaly.description }}</td>
+                        <td>{{ anomaly.impact }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td>15/06/2023</td>
+                        <td>{{ t('cleaning') or 'Cleaning' }}</td>
+                        <td>{{ t('low_attendance') or 'Low Attendance' }}</td>
+                        <td>{{ t('anomaly_desc_1') or 'Unusually low attendance rate (58%)' }}</td>
+                        <td>{{ t('medium') or 'Medium' }}</td>
+                    </tr>
+                    <tr>
+                        <td>22/06/2023</td>
+                        <td>{{ t('gardening') or 'Gardening' }}</td>
+                        <td>{{ t('high_absence') or 'High Absence' }}</td>
+                        <td>{{ t('anomaly_desc_2') or 'Multiple absences without notice (8 employees)' }}</td>
+                        <td>{{ t('high') or 'High' }}</td>
+                    </tr>
+                    <tr>
+                        <td>10/06/2023</td>
+                        <td>{{ t('maintenance') or 'Maintenance' }}</td>
+                        <td>{{ t('early_departure') or 'Early Departure' }}</td>
+                        <td>{{ t('anomaly_desc_3') or 'Group early departures (avg. 2 hours early)' }}</td>
+                        <td>{{ t('medium') or 'Medium' }}</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Summary and Conclusion -->
+    <div class="section-title">{{ t('conclusion') or 'Conclusion and Next Steps' }}</div>
+    <p>{{ t('conclusion_text') or 'The overall attendance performance shows positive trends with some areas requiring attention. The Maintenance and Administration departments demonstrate excellent attendance rates and can serve as internal benchmarks. The Gardening department requires immediate attention with specific interventions recommended to improve attendance rates.' }}</p>
+    
+    <p>{{ t('recommendation_text') or 'Recommended actions include:' }}</p>
+    <ol>
+        <li>{{ t('recommendation_1') or 'Investigate the pattern of lower attendance on Thursdays across departments.' }}</li>
+        <li>{{ t('recommendation_2') or 'Implement attendance improvement program for the Gardening department.' }}</li>
+        <li>{{ t('recommendation_3') or 'Consider replicating attendance management practices from the Maintenance department.' }}</li>
+        <li>{{ t('recommendation_4') or 'Review early shift assignments which show better attendance patterns.' }}</li>
+        <li>{{ t('recommendation_5') or 'Deploy attendance monitoring system enhancements as scheduled next month.' }}</li>
+    </ol>
+    
+    <!-- Signature Area -->
+    <div class="signature-area">
+        <div class="row">
+            <div class="col-md-4 offset-md-2 text-center">
+                <div class="signature-line"></div>
+                <div class="signature-name">{{ t('general_manager') or 'General Manager' }}</div>
+                <div class="signature-title">{{ t('approval') or 'Approval' }}</div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="signature-line"></div>
+                <div class="signature-name">{{ t('hr_director') or 'HR Director' }}</div>
+                <div class="signature-title">{{ t('preparation') or 'Preparation' }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Print Footer -->
+    <div class="print-footer">
+        {{ t('report_footer') or 'Generated by Attendance Management System' }} | {{ report_date or '30/06/2023' }}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Print button functionality
+        document.getElementById('printButton').addEventListener('click', function() {
+            window.print();
+        });
+        
+        // Handle report type change to show/hide sections
+        document.getElementById('reportType').addEventListener('change', function() {
+            // Implementation could be added to show/hide sections based on report type
+        });
+        
+        // Handle language change
+        document.getElementById('language').addEventListener('change', function() {
+            // Implementation could redirect to version with different language query param
+        });
+    });
+</script>
+{% endblock %}

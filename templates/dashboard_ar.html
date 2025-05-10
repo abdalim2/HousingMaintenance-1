@@ -161,47 +161,19 @@
     <!-- قسم التحليلات الذكية -->
     <div class="row mb-4">
         <div class="col-md-12">
-            <div class="card bg-dark">
-                <div class="card-header">
+            <div class="card bg-dark border-success">
+                <div class="card-header bg-dark border-success">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-brain me-2"></i> تحليلات الذكاء الاصطناعي
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <div class="card bg-primary bg-opacity-25 h-100">
-                                <div class="card-body">
-                                    <h5 class="card-title">
-                                        <i class="fas fa-exclamation-triangle me-2"></i> اكتشاف الاستثناءات
-                                    </h5>
-                                    <p class="card-text">تحليل أنماط الحضور غير العادية والاستثناءات التي تحتاج المتابعة</p>
-                                    <a href="{{ url_for('ai_anomalies') }}" class="btn btn-sm btn-outline-light">عرض الاستثناءات</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card bg-success bg-opacity-25 h-100">
-                                <div class="card-body">
-                                    <h5 class="card-title">
-                                        <i class="fas fa-chart-pie me-2"></i> أنماط الحضور
-                                    </h5>
-                                    <p class="card-text">تحليل أنماط الحضور المتكررة لتحسين تخطيط القوى العاملة</p>
-                                    <a href="{{ url_for('ai_patterns') }}" class="btn btn-sm btn-outline-light">عرض الأنماط</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card bg-warning bg-opacity-25 h-100">
-                                <div class="card-body">
-                                    <h5 class="card-title">
-                                        <i class="fas fa-lightbulb me-2"></i> توصيات التحسين
-                                    </h5>
-                                    <p class="card-text">الحصول على توصيات مدعومة بالذكاء الاصطناعي لتحسين الحضور وكفاءة القوى العاملة</p>
-                                    <a href="{{ url_for('ai_recommendations') }}" class="btn btn-sm btn-outline-light">عرض التوصيات</a>
-                                </div>
-                            </div>
-                        </div>
+                    <p class="text-muted mb-4">تم نقل ميزات تحليلات الذكاء الاصطناعي إلى صفحة مخصصة للتنظيم الأفضل وتحسين الأداء.</p>
+                    
+                    <div class="text-center">
+                        <a href="{{ url_for('ai_analytics') }}" class="btn btn-success">
+                            <i class="fas fa-brain me-2"></i> فتح لوحة تحكم تحليلات الذكاء الاصطناعي
+                        </a>
                     </div>
                 </div>
             </div>

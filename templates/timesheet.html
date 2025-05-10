@@ -29,9 +29,9 @@
     </form>
 </div>
 
-<button class="btn btn-sm btn-success" id="export-pdf">
+<a href="{{ url_for('export_timesheet', year=selected_year, month=selected_month, department=selected_dept, housing=selected_housing) }}" class="btn btn-sm btn-success">
     <i class="fas fa-file-pdf"></i> Export PDF
-</button>
+</a>
 {% endblock %}
 
 {% block content %}

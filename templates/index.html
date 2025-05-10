@@ -177,91 +177,11 @@
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-lg-6 mb-4">
-                        <div class="card bg-dark border-primary h-100">
-                            <div class="card-header bg-dark border-primary">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-exclamation-triangle me-2"></i> كشف الانماط غير العادية
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <p class="card-text text-muted">
-                                    استخدم الذكاء الاصطناعي لتحديد أنماط الحضور غير العادية والاستثناءات في بيانات الحضور
-                                </p>
-                                <div class="d-grid">
-                                    <a href="{{ url_for('ai_anomalies') }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-search me-2"></i> عرض التحليل
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-6 mb-4">
-                        <div class="card bg-dark border-warning h-100">
-                            <div class="card-header bg-dark border-warning">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-lightbulb me-2"></i> توصيات الحضور والانصراف
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <p class="card-text text-muted">
-                                    الحصول على توصيات ذكية لتحسين سياسات الحضور والاستفادة من البيانات التاريخية
-                                </p>
-                                <div class="d-grid">
-                                    <a href="{{ url_for('ai_recommendations') }}" class="btn btn-sm btn-outline-warning">
-                                        <i class="fas fa-lightbulb me-2"></i> عرض التوصيات
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-6 mb-4">
-                        <div class="card bg-dark border-info h-100">
-                            <div class="card-header bg-dark border-info">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-chart-line me-2"></i> التنبؤ بالحضور
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <p class="card-text text-muted">
-                                    استخدام التعلم الآلي للتنبؤ بأنماط الحضور المستقبلية بناءً على البيانات التاريخية
-                                </p>
-                                <div class="d-grid">
-                                    <a href="{{ url_for('ai_predictions') }}" class="btn btn-sm btn-outline-info">
-                                        <i class="fas fa-calendar-alt me-2"></i> عرض التوقعات
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-6 mb-4">
-                        <div class="card bg-dark border-success h-100">
-                            <div class="card-header bg-dark border-success">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-sitemap me-2"></i> تجميع الموظفين حسب السلوك
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <p class="card-text text-muted">
-                                    استخدام خوارزميات التعلم غير الموجه لتجميع الموظفين بناءً على أنماط الحضور المتشابهة
-                                </p>
-                                <div class="d-grid">
-                                    <a href="{{ url_for('ai_clustering') }}" class="btn btn-sm btn-outline-success">
-                                        <i class="fas fa-users me-2"></i> عرض المجموعات
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="text-center mt-3">
-                    <a href="{{ url_for('ai_dashboard') }}" class="btn btn-success">
-                        <i class="fas fa-chart-bar me-2"></i> عرض لوحة تحكم الذكاء الاصطناعي الكاملة
+                <p class="text-muted mb-4">{{ t('ai_analytics_moved_message') or 'The AI Analytics features have been moved to a dedicated page for better organization and improved performance.' }}</p>
+                
+                <div class="text-center">
+                    <a href="{{ url_for('ai_analytics') }}" class="btn btn-success">
+                        <i class="fas fa-brain me-2"></i> {{ t('open_ai_analytics') or 'Open AI Analytics Dashboard' }}
                     </a>
                 </div>
             </div>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" {% if get_locale() == 'ar' %}dir="rtl"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ timesheet_data.month_name }} {{ timesheet_data.year }} - {{ t('monthly_timesheet') }}</title>
+    <style>
+        /* Base styles and reset */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+            color: #000;
+            background: #fff;
+        }
+
+        /* Print-specific styles */
+        @page {
+            size: landscape;
+            margin: 1.5cm;
+        }
+
+        /* Container styling */
+        .print-container {
+            width: 100%;
+            background: #fff;
+        }
+
+        /* Header styling */
+        .print-header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #2c3e50;
+            position: relative;
+        }
+
+        .print-header .logo {
+            height: 70px;
+            position: absolute;
+            {% if get_locale() == 'ar' %}
+            right: 0;
+            {% else %}
+            left: 0;
+            {% endif %}
+            top: 0;
+        }
+
+        .print-header h1 {
+            font-size: 24pt;
+            color: #2c3e50;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .print-header h2 {
+            font-size: 16pt;
+            color: #3498db;
+            font-weight: normal;
+            margin: 5px 0 10px 0;
+        }
+
+        .print-header .info-container {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10pt;
+            color: #555;
+            margin-top: 10px;
+        }
+
+        .print-header .company-info {
+            text-align: {% if get_locale() == 'ar' %}right{% else %}left{% endif %};
+        }
+
+        .print-header .timesheet-info {
+            text-align: {% if get_locale() == 'ar' %}left{% else %}right{% endif %};
+        }
+
+        /* Table styling */
+        .timesheet-print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 9pt;
+        }
+
+        .timesheet-print-table th {
+            background-color: #2c3e50;
+            color: #fff;
+            font-weight: 600;
+            text-align: center;
+            padding: 8px 4px;
+            border: 1px solid #34495e;
+        }
+
+        .timesheet-print-table td {
+            padding: 6px 4px;
+            border: 1px solid #bdc3c7;
+            text-align: center;
+        }
+
+        /* Employee header row */
+        .employee-row {
+            background-color: #ecf0f1;
+            font-weight: bold;
+        }
+
+        /* Housing header row */
+        .housing-header {
+            background-color: #34495e;
+            color: #fff;
+            font-weight: bold;
+            text-align: {% if get_locale() == 'ar' %}right{% else %}left{% endif %};
+            padding: 6px 8px !important;
+            font-size: 11pt;
+        }
+
+        /* Alternating row colors */
+        .timesheet-print-table tr:nth-child(even):not(.housing-header) {
+            background-color: #f9f9f9;
+        }
+
+        /* Status colors with better visibility */
+        .status-P {
+            background-color: #e8f5e9 !important;
+            color: #1b5e20;
+        }
+
+        .status-A {
+            background-color: #ffebee !important;
+            color: #b71c1c;
+        }
+
+        .status-V {
+            background-color: #e3f2fd !important;
+            color: #0d47a1;
+        }
+
+        .status-T {
+            background-color: #e8f5e9 !important;
+            color: #1b5e20;
+            font-style: italic;
+        }
+
+        .status-S {
+            background-color: #fff8e1 !important;
+            color: #ff6f00;
+        }
+
+        .status-E {
+            background-color: #e0f7fa !important; 
+            color: #006064;
+        }
+
+        .status-W {
+            background-color: #f5f5f5 !important;
+            color: #424242;
+        }
+
+        /* Weekend column styling */
+        .weekend-day {
+            background-color: #ecf0f1;
+            font-weight: bold;
+        }
+
+        /* Total columns styling */
+        .total-column {
+            background-color: #e1f5fe !important;
+            color: #01579b;
+            font-weight: bold;
+        }
+
+        /* Footer styling */
+        .print-footer {
+            margin-top: 20px;
+            border-top: 1px solid #bdc3c7;
+            padding-top: 10px;
+            font-size: 9pt;
+            color: #7f8c8d;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .print-footer .page-info {
+            text-align: {% if get_locale() == 'ar' %}left{% else %}right{% endif %};
+        }
+
+        /* Status legend */
+        .status-legend {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 9pt;
+        }
+
+        .status-legend-item {
+            display: flex;
+            align-items: center;
+        }
+
+        .status-legend-color {
+            width: 16px;
+            height: 16px;
+            margin-right: 5px;
+            border: 1px solid #bdc3c7;
+        }
+
+        /* Signature section */
+        .signature-section {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .signature-box {
+            width: 30%;
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            padding-top: 5px;
+            margin-top: 40px;
+        }
+
+        /* RTL specific adjustments */
+        {% if get_locale() == 'ar' %}
+        body {
+            font-family: 'Segoe UI', 'Arial', 'Tahoma', sans-serif;
+        }
+        {% endif %}
+
+        /* Print optimization */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            .timesheet-print-table {
+                page-break-inside: auto;
+            }
+            
+            .timesheet-print-table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            
+            .timesheet-print-table thead {
+                display: table-header-group;
+            }
+            
+            .timesheet-print-table tfoot {
+                display: table-footer-group;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-container">
+        <div class="print-header">
+            <img src="{{ url_for('static', filename='img/company-logo.svg') }}" alt="Company Logo" class="logo">
+            <h1>{{ t('monthly_timesheet') }}</h1>
+            <h2>{{ month_name }} {{ year }}</h2>
+            
+            <div class="info-container">
+                <div class="company-info">
+                    <div><strong>{{ t('department') }}:</strong> {{ department_name }}</div>
+                    <div><strong>{{ t('housing') }}:</strong> {{ housing_name }}</div>
+                    <div><strong>{{ t('period') }}:</strong> {{ period_text }}</div>
+                </div>
+                <div class="timesheet-info">
+                    <div><strong>{{ t('generated') }}:</strong> {{ export_date }}</div>
+                    <div><strong>{{ t('report_id') }}:</strong> {{ report_id }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Timesheet table -->
+        <table class="timesheet-print-table">
+            <thead>
+                <tr class="text-center">
+                    <th rowspan="2" class="text-center align-middle">{{ t('employee_code') }}</th>
+                    <th rowspan="2" class="text-center align-middle">{{ t('name') }}</th>
+                    <th rowspan="2" class="text-center align-middle">{{ t('profession') }}</th>
+                    
+                    <!-- Dates header -->
+                    {% for date in timesheet_data.dates %}
+                        <th class="text-center {% if date.weekday() in timesheet_data.weekend_days %}weekend-day{% endif %}">
+                            {{ date.day }}
+                        </th>
+                    {% endfor %}
+                    
+                    <!-- Total columns -->
+                    <th rowspan="2" class="text-center align-middle total-column">{{ t('regular_hours') }}</th>
+                    <th rowspan="2" class="text-center align-middle total-column">{{ t('overtime') }}</th>
+                </tr>
+                <tr class="text-center">
+                    <!-- Weekday header -->
+                    {% for date in timesheet_data.dates %}
+                        <th class="text-center small {% if date.weekday() in timesheet_data.weekend_days %}weekend-day{% endif %}">
+                            {{ date.strftime('%a') }}
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% set housing_groups = {} %}
+                
+                <!-- Group employees by housing instead of device -->
+                {% for employee in timesheet_data.employees %}
+                    {% set housing = employee.housing|default('Unknown Housing') %}
+                    {% if housing not in housing_groups %}
+                        {% set _ = housing_groups.update({housing: []}) %}
+                    {% endif %}
+                    {% set _ = housing_groups[housing].append(employee) %}
+                {% endfor %}
+                
+                <!-- Display employees grouped by housing -->
+                {% for housing, employees in housing_groups.items() %}
+                    <!-- Housing header row -->
+                    <tr>
+                        <td colspan="{{ 3 + timesheet_data.dates|length + 2 }}" class="housing-header">
+                            {{ housing }}
+                        </td>
+                    </tr>
+                    
+                    <!-- Employees for this housing -->
+                    {% for employee in employees %}
+                        <tr {% if loop.index is even %}class="even-row"{% endif %}>
+                            <td>{{ employee.employee_code }}</td>
+                            <td>{{ employee.name }}</td>
+                            <td>{{ employee.profession|default('') }}</td>
+                              <!-- Attendance cells -->
+                            {% for date in timesheet_data.dates %}
+                                {% set day_str = date.strftime('%Y-%m-%d') %}
+                                {% set found_day = none %}
+                                {% for day in employee.attendance %}
+                                    {% if day.date == day_str %}
+                                        {% set found_day = day %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if found_day %}
+                                    <td class="status-{{ found_day.status }}">{{ found_day.value|default('') }}</td>
+                                {% else %}
+                                    <td></td>
+                                {% endif %}
+                            {% endfor %}
+                              <!-- Totals -->
+                            <td class="total-column">
+                                {% if employee.total_work_hours is defined %}
+                                    {% if employee.total_work_hours == employee.total_work_hours|int %}
+                                        {{ employee.total_work_hours|int }}
+                                    {% else %}
+                                        {{ employee.total_work_hours|round(1) }}
+                                    {% endif %}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </td>
+                            <td class="total-column">
+                                {% if employee.total_overtime_hours is defined %}
+                                    {% if employee.total_overtime_hours == employee.total_overtime_hours|int %}
+                                        {{ employee.total_overtime_hours|int }}
+                                    {% else %}
+                                        {{ employee.total_overtime_hours|round(1) }}
+                                    {% endif %}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="status-legend">
+            <div class="status-legend-item">
+                <div class="status-legend-color status-P"></div>
+                <div>{{ t('present') }} (P)</div>
+            </div>
+            <div class="status-legend-item">
+                <div class="status-legend-color status-A"></div>
+                <div>{{ t('absent') }} (A)</div>
+            </div>
+            <div class="status-legend-item">
+                <div class="status-legend-color status-V"></div>
+                <div>{{ t('vacation') }} (V)</div>
+            </div>
+            <div class="status-legend-item">
+                <div class="status-legend-color status-S"></div>
+                <div>{{ t('sick') }} (S)</div>
+            </div>
+            <div class="status-legend-item">
+                <div class="status-legend-color status-W"></div>
+                <div>{{ t('weekend') }} (W)</div>
+            </div>
+            <div class="status-legend-item">
+                <div class="status-legend-color status-T"></div>
+                <div>{{ t('transfer') }} (T)</div>
+            </div>
+        </div>
+        
+        <div class="signature-section">
+            <div class="signature-box">
+                <div class="signature-line">{{ t('prepared_by') }}</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line">{{ t('approved_by') }}</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line">{{ t('department_manager') }}</div>
+            </div>
+        </div>
+        
+        <div class="print-footer">
+            <div>{{ t('housing_maintenance_system') }} - {{ t('monthly_timesheet') }}</div>
+            <div class="page-info">{{ t('page') }} 1 {{ t('of') }} 1</div>
+        </div>
+    </div>
+    
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

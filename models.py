@@ -90,6 +90,7 @@ class AttendanceRecord(db.Model):
     terminal_alias_in = db.Column(db.String(100))
     terminal_alias_out = db.Column(db.String(100))
     exception = db.Column(db.String(100))
+    notes = db.Column(db.Text, nullable=True)  # Added notes column for sync comments
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_synced = db.Column(db.Boolean, default=False)

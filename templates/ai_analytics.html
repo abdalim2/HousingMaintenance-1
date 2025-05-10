@@ -1,0 +1,149 @@
+{% extends 'layout.html' %}
+
+{% block page_title %}{{ t('ai_analytics') or 'AI Analytics' }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Anomaly Detection Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card bg-dark">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>{{ t('anomaly_detection') or 'Anomaly Detection' }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">{{ t('anomaly_detection_description') or 'Use AI to identify unusual attendance patterns and inconsistencies in biometric data.' }}</p>
+                    <div class="d-grid">                        <a href="{{ url_for('ai_anomalies') }}" class="btn btn-primary">
+                            <i class="fas fa-search me-2"></i>{{ t('run_analysis') or 'Run Analysis' }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Prediction Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card bg-dark">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line me-2"></i>{{ t('attendance_prediction') or 'Attendance Prediction' }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">{{ t('attendance_prediction_description') or 'Predict future attendance patterns based on historical data.' }}</p>
+                    <div class="d-grid">                        <a href="{{ url_for('ai_predictions') }}" class="btn btn-primary">
+                            <i class="fas fa-chart-bar me-2"></i>{{ t('view_predictions') or 'View Predictions' }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Employee Clustering Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card bg-dark">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-users me-2"></i>{{ t('employee_clustering') or 'Employee Clustering' }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">{{ t('employee_clustering_description') or 'Group employees based on attendance patterns using unsupervised learning.' }}</p>
+                    <div class="d-grid">                        <a href="{{ url_for('ai_clustering') }}" class="btn btn-primary">
+                            <i class="fas fa-project-diagram me-2"></i>{{ t('view_clusters') or 'View Clusters' }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optimization Recommendations Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card bg-dark">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>{{ t('optimization_recommendations') or 'Optimization Recommendations' }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">{{ t('optimization_recommendations_description') or 'Get AI-powered recommendations to improve attendance policies and workforce management.' }}</p>
+                    <div class="d-grid">
+                        <a href="{{ url_for('ai_recommendations') }}" class="btn btn-primary">
+                            <i class="fas fa-clipboard-list me-2"></i>{{ t('view_recommendations') or 'View Recommendations' }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">{{ t('ai_dashboard') or 'AI Dashboard' }}</h5>
+                </div>
+                <div class="card-body">
+                    <div id="aiChartContainer" class="mb-4">
+                        <canvas id="aiChart" height="300"></canvas>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {{ t('ai_dashboard_description') or 'This dashboard provides an overview of the AI analytics capabilities. Click on specific sections above for detailed analysis.' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Sample data for the AI dashboard chart
+        const ctx = document.getElementById('aiChart').getContext('2d');
+        
+        // Create a chart showing AI analytics metrics
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['{{ t("anomalies_detected") or "Anomalies Detected" }}', 
+                         '{{ t("prediction_accuracy") or "Prediction Accuracy" }}', 
+                         '{{ t("optimizations_suggested") or "Optimizations Suggested" }}', 
+                         '{{ t("clusters_identified") or "Clusters Identified" }}'],
+                datasets: [{
+                    label: '{{ t("ai_metrics") or "AI Metrics" }}',
+                    data: [12, 95, 8, 4],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

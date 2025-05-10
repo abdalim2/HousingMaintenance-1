@@ -99,6 +99,11 @@ def utility_processor():
     
     def get_dir():
         return 'rtl' if g.language == 'ar' else 'ltr'
+    
+    def get_locale():
+        return g.language
+        
+    return dict(now=now, t=t, get_dir=get_dir, get_locale=get_locale)
         
     return dict(now=now, t=t, get_dir=get_dir)
 
@@ -313,14 +318,14 @@ def add_department():
         
         # Check if department already exists with this name or ID
         existing_dept = Department.query.filter((Department.name == name) | 
-                                             (Department.biotime_id == biotime_id)).first()
+                                             (Department.dept_id == biotime_id)).first()
         if existing_dept:
             flash('يوجد قسم بنفس الاسم أو رقم المعرف', 'danger')
             return redirect(url_for('departments'))
         
         new_department = Department(
             name=name,
-            biotime_id=biotime_id,
+            dept_id=biotime_id,
             active=True
         )
         
@@ -352,10 +357,9 @@ def edit_department():
         if not department:
             flash('لم يتم العثور على القسم', 'danger')
             return redirect(url_for('departments'))
-        
-        # Check if another department has this name or ID
+          # Check if another department has this name or ID
         existing_dept = Department.query.filter(
-            ((Department.name == name) | (Department.biotime_id == biotime_id)) & 
+            ((Department.name == name) | (Department.dept_id == biotime_id)) & 
             (Department.id != department.id)
         ).first()
         
@@ -364,7 +368,7 @@ def edit_department():
             return redirect(url_for('departments'))
         
         department.name = name
-        department.biotime_id = biotime_id
+        department.dept_id = biotime_id
         department.active = active
         
         db.session.commit()
@@ -677,13 +681,17 @@ def delete_transfer(id):
 
 @app.route('/settings')
 def settings():
-    """Render settings page with current BiometricSync settings"""
+    """Render settings page with current BiometricSync settings"""    # Convert DEPARTMENTS list to comma-separated string for display
+    current_depts = os.environ.get('DEPARTMENTS', None)
+    if not current_depts and hasattr(sync_service, 'DEPARTMENTS'):
+        current_depts = ','.join(map(str, sync_service.DEPARTMENTS))
+    
     sync_settings = {
         'api_url': os.environ.get('BIOTIME_API_URL', 'http://172.16.16.13:8585/att/api/transactionReport/export/'),
         'username': os.environ.get('BIOTIME_USERNAME', 'raghad'),
         'password': '********',  # Never expose the actual password
         'interval': os.environ.get('SYNC_INTERVAL', '24'),
-        'departments': os.environ.get('DEPARTMENTS', '10'),
+        'departments': current_depts or '10',  # Use current departments from environment or sync_service
         'start_date': os.environ.get('SYNC_START_DATE', ''),
         'end_date': os.environ.get('SYNC_END_DATE', ''),
         'language': session.get('language', 'en')  # Add language setting
@@ -1124,9 +1132,8 @@ def save_settings():
                         )
                 else:
                     flash('Sync interval must be a positive number', 'warning')
-            except ValueError:
-                flash('Sync interval must be a valid number', 'warning')
-                
+            except ValueError:                flash('Sync interval must be a valid number', 'warning')
+        
         if 'departments' in request.form and request.form.get('departments'):
             departments = request.form.get('departments').strip()
             # Parse comma-separated department list
@@ -1138,7 +1145,8 @@ def save_settings():
                 
                 if dept_list:  # Only update if at least one valid department ID
                     sync_service.DEPARTMENTS = dept_list
-                    os.environ['SYNC_DEPARTMENTS'] = departments
+                    os.environ['DEPARTMENTS'] = departments  # Fix: use correct environment variable name
+                    logger.info(f"Departments updated to: {dept_list}")
                 else:
                     flash('No valid department IDs provided, using default departments', 'warning')
             except Exception as dept_e:
@@ -1864,6 +1872,58 @@ def update_housing_assignments():
     next_page = request.args.get('next') or request.referrer or url_for('settings')
     return redirect(next_page)
 
+@app.route('/ai_analytics')
+def ai_analytics():
+    """Display the AI analytics dashboard page"""
+    try:
+        return render_template('ai_analytics.html')
+    except Exception as e:
+        logger.error(f"Error loading AI analytics page: {str(e)}")
+        flash(f"حدث خطأ أثناء تحميل صفحة تحليلات الذكاء الاصطناعي: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+@app.route('/print_report')
+def print_report():
+    """Display the professional print report for the general manager"""
+    try:
+        # Get summary data for the report
+        departments = Department.query.all()
+        housings = Housing.query.all()
+        
+        # Get count of employees by department
+        dept_counts = db.session.query(
+            Department.name, 
+            db.func.count(Employee.id).label('count')
+        ).join(Employee, Department.id == Employee.department_id, isouter=True)\
+         .group_by(Department.name).all()
+        
+        # Get count of employees by housing
+        housing_counts = db.session.query(
+            Housing.name, 
+            db.func.count(Employee.id).label('count')
+        ).join(Employee, Housing.id == Employee.housing_id, isouter=True)\
+         .group_by(Housing.name).all()
+        
+        # Get attendance summary for current month
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        # Get recent attendance records (using AttendanceRecord model)
+        recent_attendance = db.session.query(
+            AttendanceRecord, Employee
+        ).join(Employee).order_by(AttendanceRecord.date.desc()).limit(10).all()
+        
+        return render_template('print_report.html', 
+                              departments=departments,
+                              housings=housings,
+                              dept_counts=dept_counts,
+                              housing_counts=housing_counts,
+                              recent_attendance=recent_attendance)
+    except Exception as e:
+        logger.error(f"Error loading print report: {str(e)}")
+        flash(f"Error loading print report: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
 # Initialize scheduler when app is ready
 with app.app_context():
     scheduler.add_job(
@@ -1879,6 +1939,62 @@ with app.app_context():
 # Shutdown scheduler when app exits
 import atexit
 atexit.register(lambda: scheduler.shutdown())
+
+@app.route('/export_timesheet', methods=['GET'])
+def export_timesheet():
+    """Export the timesheet in a print-friendly format"""
+    # Get the same parameters as the timesheet view
+    year = request.args.get('year', data_processor.get_current_year())
+    month = request.args.get('month', data_processor.get_current_month())
+    dept_id = request.args.get('department', None)
+    housing_id = request.args.get('housing', None)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Process and format timesheet data using the same function as the regular view
+    try:
+        timesheet_data = data_processor.generate_timesheet(year, month, dept_id, start_date, end_date, housing_id)
+        if timesheet_data.get('total_employees', 0) == 0:
+            logger.warning(f"No employees found for timesheet export: Year={year}, Month={month}, Dept={dept_id}, Housing={housing_id}")
+    except Exception as e:
+        logger.error(f"Error generating timesheet for export: {str(e)}")
+        flash(f"Error exporting timesheet: {str(e)}", "danger")
+        return redirect(url_for('timesheet', year=year, month=month, department=dept_id, housing=housing_id))
+      # Get department name if specified
+    department_name = get_text('all_departments', g.language)
+    if dept_id:
+        dept = Department.query.get(dept_id)
+        if dept:
+            department_name = dept.name
+      # Get housing name if specified
+    housing_name = get_text('all_housings', g.language)
+    if housing_id:
+        housing = Housing.query.get(housing_id)
+        if housing:
+            housing_name = housing.name
+    
+    # Current date for the export
+    current_date = datetime.now()
+    report_id = f"{current_date.strftime('%y%m%d%H%M')}"
+    
+    # Format dates for the period text
+    month_name = timesheet_data.get('month_name', '')
+    year = timesheet_data.get('year', '')
+    period_text = f"{month_name} {year}"
+    export_date = current_date.strftime('%Y-%m-%d %H:%M')
+    
+    # Render the professional PDF template
+    return render_template(
+        'timesheet_print.html',
+        timesheet_data=timesheet_data,
+        department_name=department_name,
+        housing_name=housing_name,
+        month_name=month_name,
+        year=year,
+        period_text=period_text,
+        export_date=export_date,
+        report_id=report_id
+    )
 
 # Run the application if this script is executed directly
 if __name__ == '__main__':
