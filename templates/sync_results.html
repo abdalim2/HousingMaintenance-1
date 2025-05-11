@@ -2,6 +2,38 @@
 
 {% block page_title %}بيانات المزامنة{% endblock %}
 
+{% block styles %}
+<style>
+    /* تحسينات تصميم الفلاتر */
+    .form-control, .form-select {
+        border: 1px solid #2a2a2a;
+        background-color: #1a1a1a;
+        color: #fff;
+    }
+    
+    .filter-input:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    /* تحسين تصميم حقول التاريخ */
+    input[type="date"] {
+        padding: 0.375rem 0.75rem;
+    }
+    
+    /* إضافة تأثير عند تطبيق الفلتر */
+    .filtering {
+        animation: pulse 1s;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row mb-4">
@@ -45,16 +77,22 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="card bg-dark border-secondary mb-3">
-                        <div class="card-header">
+                      <div class="card bg-dark border-secondary mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">فلترة البيانات</h6>
+                            {% if filter_status and filter_status.applied %}
+                            <span class="badge bg-info">عدد السجلات المستخرجة: {{ filter_status.filtered_count }}</span>
+                            {% endif %}
                         </div>
-                        <div class="card-body">
+                        <div class="card-body">                            {% if filter_status and filter_status.info and filter_status.info|length > 0 %}
+                            <div class="alert alert-info mb-3">
+                                <small><strong>الفلاتر المطبقة:</strong> {{ filter_status.info|join(', ') }}</small>
+                            </div>
+                            {% endif %}
                             <form id="filterForm" class="row g-3" method="get">
                                 <div class="col-md-3">
                                     <label for="department" class="form-label">القسم</label>
-                                    <select class="form-select" id="department" name="department">
+                                    <select class="form-select filter-input" id="department" name="department">
                                         <option value="">كل الأقسام</option>
                                         {% for dept in departments %}
                                             <option value="{{ dept.id }}" {% if selected_dept == dept.id|string %}selected{% endif %}>
@@ -65,18 +103,21 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label for="start_date" class="form-label">من تاريخ</label>
-                                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ filter_data.start_date }}">
+                                    <input type="date" class="form-control filter-input" id="start_date" name="start_date" value="{{ filter_data.start_date }}">
                                 </div>
                                 <div class="col-md-3">
                                     <label for="end_date" class="form-label">إلى تاريخ</label>
-                                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ filter_data.end_date }}">
+                                    <input type="date" class="form-control filter-input" id="end_date" name="end_date" value="{{ filter_data.end_date }}">
+                                </div>                                <div class="col-md-3">
+                                    <label for="employee" class="form-label">اسم الموظف</label>
+                                    <input type="text" class="form-control filter-input" id="employee" name="employee" placeholder="بحث باسم الموظف" value="{{ filter_data.employee }}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label for="employee" class="form-label">الموظف</label>
-                                    <input type="text" class="form-control" id="employee" name="employee" placeholder="بحث باسم الموظف" value="{{ filter_data.employee }}">
+                                    <label for="employee_code" class="form-label">رمز الموظف</label>
+                                    <input type="text" class="form-control filter-input" id="employee_code" name="employee_code" placeholder="بحث برمز الموظف" value="{{ filter_data.employee_code }}">
                                 </div>
                                 <div class="col-12">
-                                    <button type="submit" class="btn btn-primary">
+                                    <button type="submit" id="filterBtn" class="btn btn-primary">
                                         <i class="fas fa-filter"></i> تطبيق الفلتر
                                     </button>
                                     <a href="{{ url_for('sync_results') }}" class="btn btn-outline-secondary">
@@ -137,10 +178,20 @@
                                                 {% endif %}
                                             </td>
                                         </tr>
-                                    {% endfor %}
-                                {% else %}
+                                    {% endfor %}                                {% else %}
                                     <tr>
-                                        <td colspan="11" class="text-center">لا توجد بيانات متاحة</td>
+                                        <td colspan="11" class="text-center">
+                                            {% if filter_status and filter_status.applied %}                                                <div class="alert alert-warning mt-2 mb-0">
+                                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                                    لا توجد بيانات تطابق معايير الفلتر المحددة
+                                                    {% if filter_status.info and filter_status.info|length > 0 %}
+                                                        <br><small>الفلاتر المطبقة: {{ filter_status.info|join(', ') }}</small>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                لا توجد بيانات متاحة
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                 {% endif %}
                             </tbody>
@@ -189,6 +240,120 @@ document.addEventListener('DOMContentLoaded', function() {
     if (refreshDataBtn) {
         refreshDataBtn.addEventListener('click', function() {
             window.location.reload();
+        });
+    }
+    
+    // وظيفة التأخير للبحث - تحسين لتجربة المستخدم
+    function debounce(func, timeout = 800) {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => { func.apply(this, args); }, timeout);
+        };
+    }
+    
+    // وظيفة التحقق من التاريخ
+    function isValidDate(dateString) {
+        if (!dateString) return true; // التاريخ الفارغ صالح
+        const date = new Date(dateString);
+        return !isNaN(date.getTime()); // يرجع true إذا كان التاريخ صالحًا
+    }
+    
+    // وظيفة تنسيق التاريخ
+    function formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString; // إذا كان التاريخ غير صالح، أرجع القيمة الأصلية
+        return date.toISOString().split('T')[0]; // تنسيق YYYY-MM-DD
+    }
+    
+    // وظيفة تقديم النموذج مع مؤثرات بصرية
+    const submitFilterForm = debounce(() => {
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        
+        // تحقق من صلاحية التواريخ قبل الإرسال
+        if (startDateInput && startDateInput.value && !isValidDate(startDateInput.value)) {
+            alert('تاريخ البداية غير صالح. يرجى استخدام التنسيق الصحيح.');
+            return;
+        }
+        
+        if (endDateInput && endDateInput.value && !isValidDate(endDateInput.value)) {
+            alert('تاريخ النهاية غير صالح. يرجى استخدام التنسيق الصحيح.');
+            return;
+        }
+        
+        // تنسيق التواريخ
+        if (startDateInput && startDateInput.value) {
+            startDateInput.value = formatDate(startDateInput.value);
+        }
+        
+        if (endDateInput && endDateInput.value) {
+            endDateInput.value = formatDate(endDateInput.value);
+        }
+        
+        // إضافة تأثير بصري للتحميل
+        const cardBody = document.querySelector('.card-body');
+        if(cardBody) {
+            cardBody.classList.add('filtering');
+            setTimeout(() => {
+                cardBody.classList.remove('filtering');
+            }, 1000);
+        }
+        
+        // إظهار مؤشر تحميل
+        const filterBtn = document.getElementById('filterBtn');
+        if (filterBtn) {
+            filterBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التصفية...';
+            filterBtn.disabled = true;
+        }
+        
+        // إرسال النموذج
+        document.getElementById('filterForm').submit();
+    });
+    
+    // إضافة مستمعي الأحداث لحقول البحث للتصفية التلقائية
+    document.querySelectorAll('.filter-input').forEach(input => {
+        if (input.id === 'department') {
+            // تصفية فورية عند تغيير القسم
+            input.addEventListener('change', submitFilterForm);
+        } else if (input.type === 'date') {
+            // استخدم الحدث 'change' لحقول التاريخ
+            input.addEventListener('change', submitFilterForm);
+        } else {
+            // تأخير للكتابة في حقول النص
+            input.addEventListener('input', submitFilterForm);
+        }
+    });
+    
+    // إضافة معالج للنموذج للتحقق النهائي قبل الإرسال
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(event) {
+            const startDateInput = document.getElementById('start_date');
+            const endDateInput = document.getElementById('end_date');
+            
+            // تحقق من صلاحية التواريخ
+            if (startDateInput && startDateInput.value && !isValidDate(startDateInput.value)) {
+                event.preventDefault();
+                alert('تاريخ البداية غير صالح. يرجى استخدام التنسيق الصحيح.');
+                return false;
+            }
+            
+            if (endDateInput && endDateInput.value && !isValidDate(endDateInput.value)) {
+                event.preventDefault();
+                alert('تاريخ النهاية غير صالح. يرجى استخدام التنسيق الصحيح.');
+                return false;
+            }
+            
+            // تنسيق التواريخ
+            if (startDateInput && startDateInput.value) {
+                startDateInput.value = formatDate(startDateInput.value);
+            }
+            
+            if (endDateInput && endDateInput.value) {
+                endDateInput.value = formatDate(endDateInput.value);
+            }
         });
     }
     

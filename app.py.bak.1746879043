@@ -122,7 +122,6 @@ with app.app_context():
 
 # Import services after models
 import data_processor
-from optimized_timesheet import optimized_generate_timesheet
 import sync_service
 
 # Initialize the scheduler
@@ -229,18 +228,14 @@ def timesheet():
     # Check for custom start and end dates from month configuration
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-      # Pagination parameters - default to first page with 50 employees per page
+    
+    # Pagination parameters - default to first page with 50 employees per page
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     offset = (page - 1) * per_page
-      # Force cache refresh if requested - check both "refresh" and "force_refresh" for compatibility
-    force_refresh = request.args.get('force_refresh', '').lower() in ('true', '1', 'yes') or \
-                    request.args.get('refresh', '').lower() in ('true', '1', 'yes')
-                    
-    # Special case: Always force refresh for May 2025 to ensure latest data is shown
-    if int(year) == 2025 and int(month) == 5:
-        force_refresh = True
-        logger.info("Forcing cache refresh for May 2025 timesheet")
+    
+    # Force cache refresh if requested
+    force_refresh = request.args.get('refresh', '').lower() in ('true', '1', 'yes')
     
     # Get departments and housings for filter dropdown with eager loading
     departments = Department.query.order_by(Department.name).all() 
@@ -291,8 +286,7 @@ def timesheet():
         session['timesheet_loading'] = True
         
         # Call the optimized generate_timesheet with pagination and caching
-        # Use optimized timesheet function for better performance
-        timesheet_data = optimized_generate_timesheet(
+        timesheet_data = data_processor.generate_timesheet(
             year, month, dept_id, start_date, end_date, housing_id, 
             limit=per_page, offset=offset, force_refresh=force_refresh
         )
@@ -2053,7 +2047,7 @@ atexit.register(lambda: scheduler.shutdown())
 
 @app.route('/export_timesheet', methods=['GET'])
 def export_timesheet():
-    """Export the timesheet in a print-friendly format with enhanced data processing"""
+    """Export the timesheet in a print-friendly format"""
     # Get the same parameters as the timesheet view
     year = request.args.get('year', data_processor.get_current_year())
     month = request.args.get('month', data_processor.get_current_month())
@@ -2062,114 +2056,11 @@ def export_timesheet():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
-    print(f"*** DEBUG: PDF Export requested for Year={year}, Month={month}, Dept={dept_id}, Housing={housing_id}")
-    
-    # Helper function for date comparison
-    def format_date_for_comparison(date_value):
-        """Format any date representation to a consistent string format for comparison"""
-        if isinstance(date_value, str):
-            return date_value
-        elif hasattr(date_value, 'strftime'):
-            return date_value.strftime('%Y-%m-%d')
-        else:
-            return str(date_value)
-    
     # Process and format timesheet data using the same function as the regular view
     try:
-        # Force a fresh reload to make sure we get the most up-to-date data
-        timesheet_data = optimized_generate_timesheet(year, month, dept_id, start_date, end_date, housing_id, force_refresh=True)
-        
-        # Post-process the data to ensure proper format for the PDF template
-        employees = timesheet_data.get('employees', [])
-        dates = timesheet_data.get('dates', [])
-        
-        # Convert dates to strings to avoid comparison issues in template
-        formatted_dates = []
-        for date_obj in dates:
-            try:
-                formatted_dates.append({
-                    'day': date_obj.day,
-                    'weekday': date_obj.weekday(),
-                    'is_weekend': date_obj.weekday() in timesheet_data.get('weekend_days', []),
-                    'date_str': date_obj.strftime('%Y-%m-%d')
-                })
-            except Exception as date_err:
-                print(f"*** WARNING: Error formatting date {date_obj}: {str(date_err)}")
-                # Add a simple fallback
-                formatted_dates.append({
-                    'day': str(date_obj),
-                    'weekday': 0,
-                    'is_weekend': False,
-                    'date_str': str(date_obj)
-                })
-          # Ensure attendance records have proper date format
-        for employee in employees:
-            # Clean up attendance data for proper display
-            clean_attendance = []
-            for att in employee.get('attendance', []):
-                if 'date' in att:
-                    try:
-                        # Use our helper to ensure date is properly formatted
-                        att['date_str'] = format_date_for_comparison(att['date'])
-                        clean_attendance.append(att)
-                    except Exception as att_err:
-                        print(f"*** WARNING: Error with attendance record for {employee.get('name')}: {str(att_err)}")
-            
-            # Replace with cleaned attendance list
-            employee['attendance'] = clean_attendance
-            
-            # Also create the attendance_by_date dictionary for easier template access
-            attendance_by_date = {}
-            for att in clean_attendance:
-                date_str = att.get('date_str', str(att.get('date', '')))
-                attendance_by_date[date_str] = {
-                    'status': att.get('status', ''),
-                    'is_weekend': att.get('is_weekend', False),
-                    'record': att.get('record', None)
-                }
-            
-            # Add the dictionary to the employee data
-            employee['attendance_by_date'] = attendance_by_date
-        
-        # Enhanced timesheet data with processed information
-        enhanced_data = {
-            'year': timesheet_data.get('year'),
-            'month': timesheet_data.get('month'),
-            'month_name': timesheet_data.get('month_name'),
-            'employees': employees,
-            'dates': dates,
-            'formatted_dates': formatted_dates,
-            'weekend_days': timesheet_data.get('weekend_days', []),
-            'housing_groups': timesheet_data.get('housing_groups', {}),
-            'total_employees': timesheet_data.get('total_employees', 0)
-        }
-          # Detailed debugging info
-        employee_count = len(employees)
-        print(f"*** DEBUG: PDF Export timesheet data: {employee_count} employees found")
-        if employee_count > 0:
-            print(f"*** DEBUG: First employee data sample: {employees[0]['name']} with {len(employees[0].get('attendance', []))} attendance records")
-            # Print detailed information about the first employee's attendance data
-            if len(employees[0].get('attendance', [])) > 0:
-                first_record = employees[0]['attendance'][0]
-                print(f"*** DEBUG: First attendance record date type: {type(first_record['date'])}")
-                print(f"*** DEBUG: First attendance record date: {first_record['date']}")
-                print(f"*** DEBUG: First attendance record status: {first_record.get('status', 'unknown')}")
-                
-            print(f"*** DEBUG: First employee attendance by date: {len(employees[0].get('attendance_by_date', {}))} dates mapped")
-        print(f"*** DEBUG: Timesheet dates: {len(dates)} days")
-        # Print the actual date types in the dates array
-        if dates:
-            print(f"*** DEBUG: First date type: {type(dates[0])}")
-            print(f"*** DEBUG: First date value: {dates[0]}")
-        
-        # Check if any housing groups were formed
-        housing_groups = timesheet_data.get('housing_groups', {})
-        print(f"*** DEBUG: Housing groups found: {len(housing_groups)}")
-        for housing, housing_employees in housing_groups.items():
-            print(f"*** DEBUG: Housing '{housing}' has {len(housing_employees)} employees")
-        
-        if employee_count == 0:
-            print(f"*** WARNING: No employees found for timesheet export: Year={year}, Month={month}, Dept={dept_id}, Housing={housing_id}")
+        timesheet_data = data_processor.generate_timesheet(year, month, dept_id, start_date, end_date, housing_id)
+        if timesheet_data.get('total_employees', 0) == 0:
+            logger.warning(f"No employees found for timesheet export: Year={year}, Month={month}, Dept={dept_id}, Housing={housing_id}")
     except Exception as e:
         logger.error(f"Error generating timesheet for export: {str(e)}")
         flash(f"Error exporting timesheet: {str(e)}", "danger")
@@ -2195,58 +2086,20 @@ def export_timesheet():
     month_name = timesheet_data.get('month_name', '')
     year = timesheet_data.get('year', '')
     period_text = f"{month_name} {year}"
-    export_date = current_date.strftime('%Y-%m-%d %H:%M')    # Use the original template with our enhanced data processing
-    print("*** DEBUG: Rendering original timesheet print template with processed data")
+    export_date = current_date.strftime('%Y-%m-%d %H:%M')
     
-    try:
-        # Add deep copy for the timesheet_data to ensure no modification during rendering
-        import copy
-        timesheet_data_copy = copy.deepcopy(timesheet_data)
-        
-        return render_template(
-            'timesheet_print.html',
-            timesheet_data=timesheet_data_copy,
-            department_name=department_name,
-            housing_name=housing_name,
-            month_name=month_name,
-            year=year,
-            period_text=period_text,
-            export_date=export_date,
-            report_id=report_id
-        )
-    except Exception as template_error:
-        print(f"*** ERROR: Template rendering failed: {str(template_error)}")
-        import traceback
-        traceback.print_exc()
-        # Emergency fallback - render a very simple template with minimal data
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>Timesheet Export</title></head>
-        <body>
-            <h1>Timesheet: {month_name} {year}</h1>
-            <p>Department: {department_name}</p>
-            <p>Housing: {housing_name}</p>
-            <p>Generated: {export_date}</p>
-            <p>Employees: {len(timesheet_data.get('employees', []))}</p>
-        </body>
-        </html>
-        """
-        from flask import Response
-        return Response(html, mimetype='text/html')
-
-# إضافة مسار التصدير البسيط للدوام
-try:
-    # تصدير كشف الدوام البسيط
-    from minimal_export import export_minimal_timesheet
-    
-    @app.route('/export_minimal_timesheet', methods=['GET'])
-    def export_minimal_timesheet_route():
-        return export_minimal_timesheet(app)()
-        
-    print("✅ تم إضافة مسار تصدير كشف الدوام البسيط بنجاح")
-except Exception as e:
-    print(f"❌ خطأ في إضافة مسار تصدير كشف الدوام البسيط: {e}")
+    # Render the professional PDF template
+    return render_template(
+        'timesheet_print.html',
+        timesheet_data=timesheet_data,
+        department_name=department_name,
+        housing_name=housing_name,
+        month_name=month_name,
+        year=year,
+        period_text=period_text,
+        export_date=export_date,
+        report_id=report_id
+    )
 
 # Run the application if this script is executed directly
 if __name__ == '__main__':

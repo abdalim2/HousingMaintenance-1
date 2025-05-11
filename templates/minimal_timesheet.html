@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>تقرير الدوام البسيط</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif;
+            direction: rtl;
+            margin: 20px;
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td { 
+            border: 1px solid black; 
+            padding: 4px; 
+            text-align: center;
+            font-size: 12px;
+        }
+        .header {
+            background-color: #4a5568;
+            color: white;
+            font-weight: bold;
+        }
+        .weekend { background-color: #f2f2f2; }
+        .P { background-color: #c6f6d5; }  /* حضور - أخضر فاتح */
+        .A { background-color: #fed7d7; }  /* غياب - أحمر فاتح */
+        .V { background-color: #bee3f8; }  /* إجازة - أزرق فاتح */
+        .S { background-color: #fefcbf; }  /* مرض - أصفر فاتح */
+        .summary {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f8f9fa;
+        }
+        .title {
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .info {
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-block {
+            margin: 0 20px;
+        }        @media print {
+            body { 
+                margin: 0;
+                padding: 5px;
+                font-size: 10px;
+            }
+            th, td {
+                padding: 2px;
+                font-size: 10px;
+            }
+            .pagebreak {
+                page-break-before: always;
+            }
+            table {
+                width: 100%;
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            .no-print {
+                display: none !important;
+            }
+            @page {
+                size: landscape;
+                margin: 10mm;
+            }
+        }
+        
+        /* للشاشات الصغيرة */
+        @media screen and (max-width: 768px) {
+            table {
+                font-size: 10px;
+            }
+            th, td {
+                padding: 2px;
+            }
+        }
+        .legend {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .legend span {
+            margin: 0 10px;
+            padding: 2px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">
+        <h1>كشف الدوام: {{ month_name }} {{ year }}</h1>
+        <div class="info">
+            <div class="info-block">
+                <p><strong>القسم:</strong> {{ department_name }}</p>
+                <p><strong>عدد الموظفين:</strong> {{ employees|length }}</p>
+            </div>
+            <div class="info-block">
+                <p><strong>السكن:</strong> {{ housing_name }}</p>
+                <p><strong>تاريخ التصدير:</strong> {{ now().strftime('%Y-%m-%d') }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="legend">
+        <span class="P">P = حاضر</span>
+        <span class="A">A = غائب</span>
+        <span class="V">V = إجازة</span>
+        <span class="S">S = مرضي</span>
+        <span class="weekend">W = عطلة</span>
+    </div>    <table>
+        <thead>
+            <tr class="header">
+                <th>الرقم</th>
+                <th>الموظف</th>
+                <th>المهنة</th>
+                {% for date in dates %}
+                <th{% if date.weekday() in weekend_days %} class="weekend"{% endif %}>{{ date.day }}<br>{{ date.strftime('%a') }}</th>
+                {% endfor %}
+                <th>أيام العمل</th>
+                <th>ساعات العمل</th>
+            </tr>
+        </thead>
+        <tbody>            {% for employee in employees %}            <tr>
+                <td>{{ employee.emp_code|default('-') }}</td>
+                <td>{{ employee.name }}</td>
+                <td>{{ employee.profession|default('-') }}</td>
+                
+                {% set present_count = 0 %}
+                {% set absent_count = 0 %}
+                {% set vacation_count = 0 %}
+                {% set total_hours = 0 %}
+                
+                {% for date in dates %}
+                    {% set date_str = date.strftime('%Y-%m-%d') %}
+                    {% set status = '' %}
+                    {% set found = false %}
+                    {% set hours = 0 %}
+                    
+                    {% for att in employee.attendance %}
+                        {% if att.date_str and att.date_str == date_str %}
+                            {% set status = att.status %}
+                            {% set found = true %}
+                            {% set hours = att.work_hours|default(8) %}
+                            
+                            {% if status == 'P' %}
+                                {% set present_count = present_count + 1 %}
+                                {% set total_hours = total_hours + hours %}
+                            {% elif status == 'A' %}
+                                {% set absent_count = absent_count + 1 %}
+                            {% elif status == 'V' %}
+                                {% set vacation_count = vacation_count + 1 %}
+                            {% endif %}
+                        {% endif %}
+                    
+                        {# يمكن أيضاً تجربة مقارنة التاريخ مباشرة إذا فشلت المقارنة بالنص #}
+                        {% if not found and att.date %}
+                            {% if hasattr(att.date, 'strftime') and att.date.strftime('%Y-%m-%d') == date_str %}
+                                {% set status = att.status %}
+                                {% set found = true %}
+                                {% set hours = att.work_hours|default(8) %}
+                                
+                                {% if status == 'P' %}
+                                    {% set present_count = present_count + 1 %}
+                                    {% set total_hours = total_hours + hours %}
+                                {% elif status == 'A' %}
+                                    {% set absent_count = absent_count + 1 %}
+                                {% elif status == 'V' %}
+                                    {% set vacation_count = vacation_count + 1 %}
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if found %}
+                        <td class="{{ status }}">{{ status }}</td>
+                    {% else %}
+                        {% if date.weekday() in weekend_days %}
+                            <td class="weekend">W</td>
+                        {% else %}
+                            <td>-</td>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+                
+                <td>{{ present_count }}</td>
+                <td>{{ employee.total_work_hours|default(total_hours)|round(1) }}</td>            </tr>
+            {% endfor %}
+            
+            {# صف الإجماليات #}
+            <tr style="font-weight: bold; background-color: #e2e8f0;">
+                <td colspan="3" style="text-align: center;">الإجمالي</td>
+                
+                {# ترك خلايا التواريخ فارغة #}
+                {% for date in dates %}
+                <td></td>
+                {% endfor %}
+                
+                {# حساب إجماليات أيام العمل وساعاته #}
+                {% set total_present_days = 0 %}
+                {% set total_work_hours = 0 %}
+                
+                {% for emp in employees %}
+                    {% set emp_present = 0 %}
+                    {% for att in emp.attendance %}
+                        {% if att.status == 'P' %}
+                            {% set emp_present = emp_present + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    {% set total_present_days = total_present_days + emp_present %}
+                    
+                    {% if emp.total_work_hours %}
+                        {% set total_work_hours = total_work_hours + emp.total_work_hours %}
+                    {% else %}
+                        {% set total_work_hours = total_work_hours + (emp_present * 8) %}
+                    {% endif %}
+                {% endfor %}
+                
+                <td>{{ total_present_days }}</td>
+                <td>{{ total_work_hours|round(1) }}</td>
+            </tr>
+        </tbody>
+    </table>
+      <div class="summary">
+        <h3>ملخص الدوام</h3>
+        <p>إجمالي عدد الموظفين: {{ employees|length }}</p>
+        <p>عدد الأيام في الشهر: {{ dates|length }}</p>
+        <p>تاريخ التقرير: {{ now().strftime('%Y-%m-%d %H:%M') }}</p>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px;">
+        <div style="display: flex; justify-content: space-around;">
+            <div>
+                <p>اعتماد مدير الإسكان</p>
+                <p style="margin-top: 40px;">________________</p>
+            </div>
+            <div>
+                <p>اعتماد شؤون الموظفين</p>
+                <p style="margin-top: 40px;">________________</p>
+            </div>
+        </div>
+    </div>
+      <div class="no-print" style="text-align: center; margin: 20px 0;">
+        <button onclick="window.print();" style="padding: 10px 20px; background-color: #4a5568; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+            طباعة التقرير
+        </button>
+    </div>
+      <script>
+        window.onload = function() {
+            {% if autoprint == 'true' %}
+            setTimeout(function() {
+                window.print();
+            }, 1000); // تأخير للسماح بتحميل الصفحة بشكل كامل قبل الطباعة
+            {% endif %}
+        };
+    </script>
+</body>
+</html>

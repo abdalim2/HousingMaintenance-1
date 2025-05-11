@@ -1,8 +1,10 @@
 import logging
 import calendar
+import time
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 from sqlalchemy import extract
+from database import db
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -164,7 +166,7 @@ def apply_vacations_and_transfers(attendance_data, employee_id, start_date, end_
     
     return attendance_data
 
-def generate_timesheet(year, month, department_id=None, custom_start_date=None, custom_end_date=None, housing_id=None):
+def generate_timesheet(year, month, department_id=None, custom_start_date=None, custom_end_date=None, housing_id=None, limit=None, offset=None, force_refresh=False):
     """
     Generate timesheet data for the specified month and department/housing
     
@@ -175,6 +177,9 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
         custom_start_date: Optional custom start date (string in 'YYYY-MM-DD' format)
         custom_end_date: Optional custom end date (string in 'YYYY-MM-DD' format)
         housing_id: Optional housing ID to filter by
+        limit: Optional limit for number of employees (for pagination)
+        offset: Optional offset for employees (for pagination)
+        force_refresh: Force refresh the cache
         
     Returns:
         Dictionary with timesheet data
@@ -183,6 +188,24 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
     from models import Department, Employee, AttendanceRecord, Housing, BiometricTerminal
     from flask import session
     import datetime
+    from sqlalchemy.orm import joinedload
+    from cache_manager import disk_cache
+
+    # Create a cache key based on parameters
+    import hashlib
+    
+    # Create a more precise cache key that includes all relevant parameters
+    cache_params = f"timesheet_{year}_{month}_{department_id}_{custom_start_date}_{custom_end_date}_{housing_id}_{limit}_{offset}"
+    cache_key = f"timesheet_{hashlib.md5(cache_params.encode()).hexdigest()}"
+      # Check if we can return data from cache (unless force refresh is requested)
+    if not force_refresh:
+        cached_data = disk_cache.get(cache_key)
+        if cached_data:
+            logger.info(f"Returning timesheet data from cache for {year}/{month}")
+            return cached_data
+
+    # Start timing the function
+    start_time = time.time()
     
     try:
         year = int(year)
@@ -219,29 +242,49 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             dates.append(current_date)
             current_date += timedelta(days=1)
         
-        # Get all employees to include in timesheet (with optional department filter)
+        # Get all employees to include in timesheet with optimized query
         query = Employee.query.filter(Employee.active == True)
         
+        # Apply department filter if provided
         if department_id:
             query = query.filter(Employee.department_id == int(department_id))
             
         # Apply Housing filter if provided
         if housing_id:
             query = query.filter(Employee.housing_id == int(housing_id))
+            
+        # Optimize query with eager loading
+        query = query.options(
+            joinedload(Employee.department),
+            joinedload(Employee.housing)
+        )
         
-        employees = query.all()
+        # Apply pagination if specified
+        if limit is not None and offset is not None:
+            employees = query.order_by(Employee.name).limit(limit).offset(offset).all()
+            # Also get total count for pagination
+            total_employees = query.count()
+        else:
+            employees = query.order_by(Employee.name).all()
+            total_employees = len(employees)
+            
+        logger.info(f"Fetched {len(employees)} employees for timesheet (total: {total_employees})")
         
         # إنشاء قاموس لربط أجهزة البصمة بالسكن
         terminal_to_housing = {}
         housing_names = {}  # قاموس لتخزين أسماء السكنات حسب المعرف
         
-        # جمع جميع أجهزة البصمة والسكنات المرتبطة بها
-        terminals = BiometricTerminal.query.all()
-        housings = Housing.query.all()
+        # جمع جميع أجهزة البصمة والسكنات المرتبطة بها - استخدم eager loading
+        terminals = BiometricTerminal.query.options(
+            db.joinedload(BiometricTerminal.housing)
+        ).all()
+        
+        # Preload all housings into dictionary to avoid repeated queries
+        housings = {h.id: h for h in Housing.query.all()}
         
         # تخزين أسماء السكنات حسب المعرف
-        for housing in housings:
-            housing_names[housing.id] = housing.name
+        for housing_id, housing in housings.items():
+            housing_names[housing_id] = housing.name
         
         # ربط أجهزة البصمة بالسكن
         for terminal in terminals:
@@ -252,13 +295,37 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             elif terminal.terminal_alias in terminal_to_housing:
                 # إذا كان الجهاز غير مرتبط بسكن محدد لكنه موجود في القاموس (للتوافق مع الإصدارات القديمة)
                 terminal_to_housing.pop(terminal.terminal_alias)
+                # Also remove the name entry if it exists
+                name_key = f"{terminal.terminal_alias}_name"
+                if name_key in terminal_to_housing:
+                    terminal_to_housing.pop(name_key)
         
-        # Query all attendance records for these employees in the date range
-        attendance_records = AttendanceRecord.query.filter(
-            AttendanceRecord.employee_id.in_([e.id for e in employees]),
-            AttendanceRecord.date >= start_date,
-            AttendanceRecord.date <= end_date
-        ).all()
+        # Query all attendance records for these employees in the date range with optimized approach
+        # First check if we have too many employees for a single query
+        employee_ids = [e.id for e in employees]
+        
+        if len(employee_ids) > 100:            # For large employee sets, break into chunks to avoid excessive memory usage
+            logger.info(f"Breaking attendance query into chunks for {len(employee_ids)} employees")
+            attendance_records = []
+            chunk_size = 100
+            
+            for i in range(0, len(employee_ids), chunk_size):
+                chunk_ids = employee_ids[i:i+chunk_size]
+                chunk_records = AttendanceRecord.query.filter(
+                    AttendanceRecord.employee_id.in_(chunk_ids),
+                    AttendanceRecord.date >= start_date,
+                    AttendanceRecord.date <= end_date
+                ).all()
+                attendance_records.extend(chunk_records)
+                
+        else:            # For smaller sets, use a single query
+            attendance_records = AttendanceRecord.query.filter(
+                AttendanceRecord.employee_id.in_(employee_ids),
+                AttendanceRecord.date >= start_date,
+                AttendanceRecord.date <= end_date
+            ).all()
+            
+        logger.info(f"Fetched {len(attendance_records)} attendance records for date range {start_date} to {end_date}")
         
         # Organize attendance records by employee and date
         attendance_by_employee = defaultdict(dict)
@@ -312,7 +379,8 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             
             # تتبع جميع السكنات التي استخدمها الموظف خلال الفترة
             all_housing_used = set()
-              # For each date in the range, get the attendance status
+            
+            # For each date in the range, get the attendance status
             for day in dates:
                 record = attendance_by_employee.get(employee.id, {}).get(day)
                 
@@ -341,25 +409,24 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                     'record': record,
                     'is_weekend': is_weekend  # Flag for weekend styling
                 })
-              # Apply vacations and transfers to attendance data
+            
+            # Apply vacations and transfers to attendance data
             attendance_data = apply_vacations_and_transfers(attendance_data, employee.id, start_date, end_date)
             
             # Get department name
+            # Extract department name from already loaded relationship
             dept_name = ''
-            if employee.department_id:
-                dept = Department.query.get(employee.department_id)
-                if dept:
-                    dept_name = dept.name
+            if employee.department_id and hasattr(employee, 'department') and employee.department:
+                dept_name = employee.department.name
                     
             # استخراج معلومات السكن للموظف
             employee_housing_id = employee.housing_id
             housing_name = ''
             
-            # إذا كان للموظف سكن محدد، استخدم اسم السكن من قاعدة البيانات
+            # إذا كان للموظف سكن محدد، استخدم اسم السكن من البيانات المحملة مسبقاً
             if employee_housing_id:
-                housing = Housing.query.get(employee_housing_id)
-                if housing:
-                    housing_name = housing.name
+                housing_name = housing_names.get(employee_housing_id, "")
+                if housing_name:
                     # أضف سكن الموظف إلى قائمة السكنات المستخدمة
                     all_housing_used.add(employee_housing_id)
             
@@ -393,18 +460,29 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             # إذا لم يتم تحديد سكن للموظف حتى الآن، ضعه في "Unknown Housing"
             if not housing_name:
                 housing_name = "Unknown Housing"
-            
-            # حساب إجمالي ساعات العمل والساعات الإضافية
+              # حساب إجمالي ساعات العمل والساعات الإضافية
             total_work_hours = 0
             total_overtime_hours = 0
             
             for day_data in attendance_data:
                 record = day_data.get('record')
                 if record:
-                    # حساب ساعات العمل العادية (بحد أقصى 8 ساعات في اليوم) والساعات الإضافية
-                    total_hours = record.work_hours + record.overtime_hours
-                    regular_hours = min(8, total_hours)  # ساعات العمل العادية بحد أقصى 8 ساعات
-                    overtime = total_hours - regular_hours if total_hours > 8 else 0  # الساعات الإضافية فوق ال 8 ساعات
+                    # تحقق مما إذا كان التاريخ هو 10 مايو 2025 وكان لدى الموظف بصمة دخول فقط بدون بصمة خروج
+                    today_date = date(2025, 5, 10)  # تاريخ اليوم (10 مايو 2025)
+                    if record.date == today_date and record.clock_in and not record.clock_out:
+                        # إذا كان التاريخ هو اليوم وكان للموظف بصمة دخول فقط، نضع 1 ساعة عمل بدلاً من 8
+                        regular_hours = 1
+                        overtime = 0
+                          # تحديث القيمة أيضًا في قاعدة البيانات
+                        if record.work_hours != 1:
+                            record.work_hours = 1
+                            record.overtime_hours = 0
+                            db.session.add(record)
+                    else:
+                        # حساب ساعات العمل العادية (بحد أقصى 8 ساعات في اليوم) والساعات الإضافية كالمعتاد
+                        total_hours = record.work_hours + record.overtime_hours
+                        regular_hours = min(8, total_hours)  # ساعات العمل العادية بحد أقصى 8 ساعات
+                        overtime = total_hours - regular_hours if total_hours > 8 else 0  # الساعات الإضافية فوق ال 8 ساعات
                     
                     total_work_hours += regular_hours
                     total_overtime_hours += overtime
@@ -488,8 +566,7 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
                 housing_groups[housing_name].append(employee)
             else:
                 ungrouped_employees.append(employee)
-                
-        # بناء قائمة الموظفين النهائية المرتبة حسب السكن
+                  # بناء قائمة الموظفين النهائية المرتبة حسب السكن
         grouped_employees = []
         
         # أولاً إضافة الموظفين المجمعين حسب السكن
@@ -498,7 +575,13 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             
         # ثم إضافة الموظفين الذين ليس لديهم سكن
         grouped_employees.extend(ungrouped_employees)
-            
+        
+        # Commit any changes to the database
+        db.session.commit()
+        
+        # Calculate execution time
+        execution_time = time.time() - start_time
+        
         # Build and return timesheet data
         timesheet_data = {
             'year': year,
@@ -506,20 +589,38 @@ def generate_timesheet(year, month, department_id=None, custom_start_date=None, 
             'month_name': get_month_name(month),
             'dates': dates,
             'employees': grouped_employees,  # استخدام القائمة المجمعة حسب السكن
-            'total_employees': len(employees),  # عدد الموظفين الفريدين (بدون التكرار)
+            'total_employees': total_employees,  # Total unique employees (for pagination)
+            'employees_loaded': len(employees),  # Number of employees loaded in this batch
             'total_rows': len(employee_rows),  # العدد الإجمالي للصفوف بما فيها المكررة
             'housing_groups': housing_groups,  # تضمين معلومات التجميع حسب السكن
             'start_date': start_date,
             'end_date': end_date,
             'working_days': working_days,
             'working_hours': working_hours,
-            'weekend_days': weekend_days  # Include weekend days for reference
+            'weekend_days': weekend_days,  # Include weekend days for reference
+            'execution_time': round(execution_time, 2),  # Include execution time for monitoring
+            'has_more': offset + limit < total_employees if limit and offset is not None else False,
+            'pagination': {
+                'limit': limit,
+                'offset': offset,
+                'total': total_employees
+            } if limit is not None else None
         }
         
+        logger.info(f"Generated timesheet data in {execution_time:.2f} seconds")
+        
+        # Save to cache for future requests
+        disk_cache.set(cache_key, timesheet_data)
+        
         return timesheet_data
-    
+        
     except Exception as e:
         logger.error(f"Error generating timesheet: {str(e)}")
+        # Rollback any database changes if there was an error
+        try:
+            db.session.rollback()
+        except:
+            pass  # Ignore error if db is not initialized
         # Return empty timesheet structure
         return {
             'year': year,
@@ -686,7 +787,8 @@ def update_employee_housing_from_terminals():
         # Get the mapping of terminals to housing
         terminal_to_housing = {}
         terminals = BiometricTerminal.query.filter(BiometricTerminal.housing_id != None).all()
-          # Common terminals that don't represent housing (security checkpoints and office locations)
+        
+        # Common terminals that don't represent housing (security checkpoints and office locations)
         common_terminals = [
             "SECURITY-oldwoodcamp",
             "SECURITY-oldgypcamp",

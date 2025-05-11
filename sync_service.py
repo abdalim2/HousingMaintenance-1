@@ -10,6 +10,7 @@ import time
 import traceback
 import random
 import csv
+from optimized_timesheet import attendance_record_to_dict
 
 # إعداد التسجيل
 logger = logging.getLogger(__name__)
@@ -204,6 +205,231 @@ def parse_biotime_csv(file_path):
     except Exception as e:
         logger.error(f"Error in custom CSV parser: {str(e)}")
         return pd.DataFrame()
+
+def process_attendance_data(db, sync_id):
+    """
+    Process temporary attendance records and create AttendanceRecord entries.
+    This function makes sure to keep all database operations within a managed session
+    to prevent detached instance errors.
+    
+    Args:
+        db: SQLAlchemy database instance
+        sync_id: ID of the sync operation
+    
+    Returns:
+        int: Number of processed records
+    """
+    from models import TempAttendance, AttendanceRecord, Employee, Department
+    from optimized_timesheet import temp_attendance_to_dict
+    
+    try:
+        logger.info(f"Processing attendance data for sync_id: {sync_id}")
+        
+        # Get all temporary records for this sync ID
+        temp_records = TempAttendance.query.filter_by(sync_id=sync_id).all()
+        total_records = len(temp_records)
+        logger.info(f"Found {total_records} temporary records to process")
+        
+        if not total_records:
+            logger.warning("No temporary records found to process")
+            return 0
+          # Convert TempAttendance to dictionary to avoid DetachedInstanceError
+        temp_attendance_dicts = [temp_attendance_to_dict(record) for record in temp_records]
+        
+        # Step 1: Group employees and departments
+        emp_codes = set()
+        dept_names = set()
+        
+        for record_dict in temp_attendance_dicts:
+            if record_dict['emp_code']:
+                emp_codes.add(record_dict['emp_code'])
+            if record_dict['dept_name']:
+                dept_names.add(record_dict['dept_name'])
+                
+        # Step 2: Get or create departments
+        dept_map = {}
+        for dept_name in dept_names:
+            dept = Department.query.filter_by(name=dept_name).first()
+            if not dept:
+                logger.info(f"Creating new department: {dept_name}")
+                dept = Department(name=dept_name)
+                db.session.add(dept)
+                db.session.flush()  # Get ID without committing
+            dept_map[dept_name] = dept.id
+          # Step 3: Get or create employees
+        emp_map = {}
+        for emp_code in emp_codes:
+            emp = Employee.query.filter_by(emp_code=emp_code).first()
+            if not emp:
+                # Find a record with this employee to get name and department
+                temp = next((r for r in temp_attendance_dicts if r['emp_code'] == emp_code), None)
+                if temp:
+                    dept_id = dept_map.get(temp['dept_name'])
+                    full_name = f"{temp['first_name']} {temp['last_name']}".strip()
+                    if not full_name:
+                        full_name = f"Employee-{emp_code}"
+                    
+                    logger.info(f"Creating new employee: {full_name} ({emp_code})")
+                    emp = Employee(
+                        emp_code=emp_code,
+                        name=full_name,
+                        department_id=dept_id
+                    )
+                    db.session.add(emp)
+                    db.session.flush()  # Get ID without committing
+            if emp:
+                emp_map[emp_code] = emp.id
+          # Step 4: Process attendance records
+        attendance_data = {}
+        for record_dict in temp_attendance_dicts:
+            if record_dict['emp_code'] not in emp_map:
+                logger.warning(f"Employee code not found: {record_dict['emp_code']}")
+                continue
+                
+            employee_id = emp_map[record_dict['emp_code']]
+            att_date = record_dict['att_date']
+            key = (employee_id, att_date)
+            
+            # Initialize the attendance record if it doesn't exist
+            if key not in attendance_data:
+                attendance_data[key] = {
+                    'employee_id': employee_id,
+                    'date': att_date,
+                    'attendance_status': 'P',  # Present
+                    'weekday': att_date.strftime('%A'),
+                    'clock_in': None,
+                    'clock_out': None,
+                    'terminal_alias_in': None,
+                    'terminal_alias_out': None,
+                    'work_hours': None,
+                    'total_time': None
+                }
+              # Process punch time
+            try:
+                punch_time_str = record_dict['punch_time'].strip()
+                time_formats = ['%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M:%S %p']
+                punch_time_obj = None
+                
+                for fmt in time_formats:
+                    try:
+                        punch_time_obj = datetime.strptime(punch_time_str, fmt).time()
+                        break
+                    except ValueError:
+                        continue
+                
+                if not punch_time_obj and ':' in punch_time_str:
+                    hours, minutes = punch_time_str.split(':')[:2]
+                    punch_time_obj = datetime.strptime(f"{int(hours):02d}:{int(minutes):02d}", '%H:%M').time()
+                
+                if not punch_time_obj:
+                    punch_time_obj = datetime.strptime("00:00", '%H:%M').time()
+                    
+                punch_datetime = datetime.combine(att_date, punch_time_obj)
+                  # Determine if this is a check-in or check-out based on time
+                is_check_in = punch_time_obj.hour < 12
+                
+                # Update earliest check-in or latest check-out
+                if is_check_in:
+                    if attendance_data[key]['clock_in'] is None or punch_datetime < attendance_data[key]['clock_in']:
+                        attendance_data[key]['clock_in'] = punch_datetime
+                        attendance_data[key]['terminal_alias_in'] = record_dict['terminal_alias']
+                else:
+                    if attendance_data[key]['clock_out'] is None or punch_datetime > attendance_data[key]['clock_out']:
+                        attendance_data[key]['clock_out'] = punch_datetime
+                        attendance_data[key]['terminal_alias_out'] = record_dict['terminal_alias']
+                        
+            except Exception as e:
+                logger.error(f"Error processing punch time {punch_time_str}: {str(e)}")
+        
+        # Step 5: Calculate work hours and create or update attendance records
+        records_created = 0
+        records_updated = 0
+        
+        for key, data in attendance_data.items():
+            # Calculate work hours if both clock_in and clock_out exist
+            if data['clock_in'] and data['clock_out']:
+                if data['clock_out'] > data['clock_in']:
+                    time_diff = data['clock_out'] - data['clock_in']
+                    hours = time_diff.total_seconds() / 3600
+                    data['work_hours'] = round(hours, 2)
+                    
+                    hours_int = int(hours)
+                    minutes = int((hours - hours_int) * 60)
+                    data['total_time'] = f"{hours_int}:{minutes:02d}"
+                else:
+                    # Correct for cases where checkout is before checkin (might be midnight crossing)
+                    logger.warning(f"Clock out before clock in for employee {data['employee_id']} on {data['date']}")
+                    data['work_hours'] = 8.0  # Default to 8 hours
+                    data['total_time'] = "8:00"
+            else:
+                # Set default values for missing clock times
+                if data['clock_in'] and not data['clock_out']:
+                    data['clock_out'] = data['clock_in'] + timedelta(hours=8)
+                    data['work_hours'] = 8.0
+                    data['total_time'] = "8:00"
+                elif data['clock_out'] and not data['clock_in']:
+                    data['clock_in'] = data['clock_out'] - timedelta(hours=8)
+                    data['work_hours'] = 8.0
+                    data['total_time'] = "8:00"
+                else:
+                    # Neither clock in nor out exists
+                    continue
+            
+            # Check if a record already exists
+            existing = AttendanceRecord.query.filter_by(
+                employee_id=data['employee_id'],
+                date=data['date']
+            ).first()
+            
+            if existing:
+                # Update existing record
+                update_needed = False
+                if data['clock_in'] and (not existing.clock_in or data['clock_in'] < existing.clock_in):
+                    existing.clock_in = data['clock_in']
+                    existing.terminal_alias_in = data['terminal_alias_in']
+                    update_needed = True
+                    
+                if data['clock_out'] and (not existing.clock_out or data['clock_out'] > existing.clock_out):
+                    existing.clock_out = data['clock_out']
+                    existing.terminal_alias_out = data['terminal_alias_out']
+                    update_needed = True
+                    
+                if update_needed:
+                    existing.work_hours = data['work_hours']
+                    existing.total_time = data['total_time']
+                    existing.is_synced = True
+                    existing.sync_id = sync_id
+                    records_updated += 1
+            else:
+                # Create new attendance record
+                new_record = AttendanceRecord(
+                    employee_id=data['employee_id'],
+                    date=data['date'],
+                    attendance_status=data['attendance_status'],
+                    weekday=data['weekday'],
+                    clock_in=data['clock_in'],
+                    clock_out=data['clock_out'],
+                    terminal_alias_in=data['terminal_alias_in'],
+                    terminal_alias_out=data['terminal_alias_out'],
+                    work_hours=data['work_hours'],
+                    total_time=data['total_time'],
+                    is_synced=True,
+                    sync_id=sync_id
+                )
+                db.session.add(new_record)
+                records_created += 1
+        
+        # Commit all changes to avoid detached instances
+        db.session.commit()
+        
+        logger.info(f"Attendance processing completed: {records_created} records created, {records_updated} records updated")
+        return records_created + records_updated
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error processing attendance data: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
     global CANCEL_SYNC, SYNC_PROGRESS, BIOTIME_API_BASE_URL, MOCK_MODE_ENABLED
@@ -552,380 +778,19 @@ def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
         if check_cancellation(sync_log, db):
             return 0
 
-        # Step 5-6: Process and save data (modified to use bulk insert)
+        # Step 5-6: Process and save data using the new function
         update_sync_status("process", 60, "جاري معالجة البيانات وتجهيزها للإدخال الجماعي...", status="in_progress")
         sync_log.step = "process"
         db.session.commit()
 
-        # معالجة الأقسام بشكل جماعي
-        departments_to_add = []
-        dept_names = [dept_name[0] for dept_name in db.session.query(TempAttendance.dept_name).distinct().all() if dept_name[0]]
-        existing_departments = {dept.name: dept for dept in Department.query.filter(Department.name.in_(dept_names)).all()}
-
-        # إضافة سجل إلى قاعدة البيانات لأي قسم غير موجود
-        for dept_name in dept_names:
-            if dept_name not in existing_departments:
-                departments_to_add.append(Department(name=dept_name))
-
-        if departments_to_add:
-            db.session.bulk_save_objects(departments_to_add)
-            db.session.commit()
-            logger.info(f"تم إضافة {len(departments_to_add)} قسم جديد بطريقة جماعية")
-
-        # تحديث المعلومات المرجعية للأقسام بعد إضافتها
-        all_departments = {dept.name: dept for dept in Department.query.filter(Department.name.in_(dept_names)).all()}
+        synced_records = process_attendance_data(db, sync_log.id)
         
-        # معالجة الموظفين بشكل جماعي - تحسين طريقة معالجة الموظفين
-        update_sync_status("process", 65, "جاري معالجة بيانات الموظفين...", status="in_progress")
-        emp_codes = [emp_code[0] for emp_code in db.session.query(TempAttendance.emp_code).distinct().all() if emp_code[0]]
-        
-        if not emp_codes:
-            logger.error("لا توجد أكواد موظفين في البيانات المستوردة")
-            update_sync_status("error", 0, "لا توجد أكواد موظفين في البيانات المستوردة", error="لا توجد أكواد موظفين صالحة", status="error")
-            return 0
-            
-        logger.info(f"تم العثور على {len(emp_codes)} كود موظف فريد في البيانات المستوردة")
-        existing_employees = {emp.emp_code: emp for emp in Employee.query.filter(Employee.emp_code.in_(emp_codes)).all()}
-        logger.info(f"عدد الموظفين الموجودين في قاعدة البيانات: {len(existing_employees)}")
-
-        # تجميع معلومات الموظفين من البيانات المؤقتة
-        employee_data = {}
-        missing_employees_count = 0
-        
-        for record in db.session.query(
-            TempAttendance.emp_code, 
-            TempAttendance.first_name, 
-            TempAttendance.last_name, 
-            TempAttendance.dept_name
-        ).distinct().all():
-            emp_code, first_name, last_name, dept_name = record
-            
-            # استخدام القسم الافتراضي إذا كان القسم غير موجود
-            department_id = all_departments.get(dept_name, list(all_departments.values())[0] if all_departments else None)
-            if department_id:
-                department_id = department_id.id
-            else:
-                # إنشاء قسم افتراضي إذا لم يكن هناك أي أقسام
-                default_dept = Department(name="Default Department")
-                db.session.add(default_dept)
-                db.session.commit()
-                department_id = default_dept.id
-                all_departments["Default Department"] = default_dept
-                logger.info("تم إنشاء قسم افتراضي لأن جميع الأقسام غير موجودة")
-            
-            if emp_code not in employee_data:
-                employee_data[emp_code] = {
-                    'name': f"{first_name} {last_name}".strip(),
-                    'department_id': department_id
-                }
-                
-                if emp_code not in existing_employees:
-                    missing_employees_count += 1
-
-        logger.info(f"عدد الموظفين الغير موجودين في قاعدة البيانات: {missing_employees_count}")
-                    
-        # إضافة الموظفين الجدد بشكل جماعي
-        employees_to_add = []
-        for emp_code, data in employee_data.items():
-            if emp_code not in existing_employees:
-                employees_to_add.append(Employee(
-                    emp_code=emp_code,
-                    name=data['name'] or f"Employee-{emp_code}",  # استخدام الكود كاسم إذا كان الاسم فارغاً
-                    department_id=data['department_id']
-                ))
-
-        if employees_to_add:
-            db.session.bulk_save_objects(employees_to_add)
-            db.session.commit()
-            logger.info(f"تم إضافة {len(employees_to_add)} موظف جديد بطريقة جماعية")
-
-        # تحديث المعلومات المرجعية للموظفين بعد إضافتهم
-        all_employees = {emp.emp_code: emp for emp in Employee.query.filter(Employee.emp_code.in_(emp_codes)).all()}
-        logger.info(f"إجمالي عدد الموظفين المعالجين: {len(all_employees)}")
-
-        # معالجة سجلات الحضور بشكل جماعي
-        update_sync_status("save", 70, "جاري تجهيز سجلات الحضور للإدخال الجماعي...", status="in_progress")
-        temp_records = TempAttendance.query.filter_by(sync_id=sync_log.id).all()
-        total_records = len(temp_records)
-        logger.info(f"بدء معالجة {total_records} سجل مؤقت")
-
-        # تجميع السجلات حسب الموظف والتاريخ
-        attendance_data = {}
-        missing_employee_codes = set()
-        processed_count = 0
-        
-        for index, record in enumerate(temp_records):
-            if index % 200 == 0:
-                progress_percent = 70 + int((index / max(1, total_records)) * 10)
-                update_sync_status("save", progress_percent, f"تجهيز السجلات: {index}/{total_records}", status="in_progress")
-                
-                if check_cancellation(sync_log, db):
-                    return 0
-            
-            try:
-                emp_code = record.emp_code
-                att_date = record.att_date
-                
-                if emp_code not in all_employees:
-                    missing_employee_codes.add(emp_code)
-                    continue
-                
-                employee_id = all_employees[emp_code].id
-                key = (employee_id, att_date)
-                
-                if key not in attendance_data:
-                    attendance_data[key] = {
-                        'employee_id': employee_id,
-                        'date': att_date,
-                        'attendance_status': 'P',
-                        'weekday': att_date.strftime('%A'),
-                        'clock_in': None,
-                        'clock_out': None,
-                        'terminal_alias_in': None,
-                        'terminal_alias_out': None
-                    }
-                    processed_count += 1
-                
-                # تحويل وقت البصمة إلى كائن datetime (تعامل مع أنماط متعددة من التنسيقات)
-                try:
-                    # محاولة تحويل الوقت إلى كائن time
-                    punch_time_str = record.punch_time.strip()
-                    punch_time_obj = None
-                    
-                    # دعم تنسيقات متعددة للوقت
-                    time_formats = ['%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M:%S %p']
-                    for time_format in time_formats:
-                        try:
-                            punch_time_obj = datetime.strptime(punch_time_str, time_format).time()
-                            break
-                        except ValueError:
-                            continue
-                    
-                    if not punch_time_obj:
-                        # إذا فشلت جميع المحاولات، استخدم التنسيق الافتراضي
-                        logger.warning(f"صيغة وقت غير معروفة: {punch_time_str}, استخدام قيمة افتراضية")
-                        if ':' in punch_time_str:
-                            hours, minutes = punch_time_str.split(':')[:2]
-                            punch_time_obj = datetime.strptime(f"{int(hours):02d}:{int(minutes):02d}", '%H:%M').time()
-                        else:
-                            punch_time_obj = datetime.strptime("00:00", '%H:%M').time()
-                    
-                    punch_datetime = datetime.combine(att_date, punch_time_obj)
-                    
-                    # تحديد نوع البصمة (دخول/خروج) بناءً على الوقت ونص الحالة
-                    punch_state_lower = record.punch_state.lower()
-                    is_check_in = False
-                    
-                    # فحص حالة البصمة بناءً على النص أولا
-                    if ('in' in punch_state_lower or 'دخول' in punch_state_lower or 
-                        'check in' in punch_state_lower or 'checkin' in punch_state_lower):
-                        is_check_in = True
-                    elif ('out' in punch_state_lower or 'خروج' in punch_state_lower or 
-                          'check out' in punch_state_lower or 'checkout' in punch_state_lower):
-                        is_check_in = False
-                    else:
-                        # إذا لم يكن النص واضح، استخدم الوقت لتحديد النوع
-                        is_check_in = punch_time_obj.hour < 12
-                    
-                    # تحديث البصمات - اختيار أبكر بصمة دخول وأتأخر بصمة خروج
-                    if is_check_in:
-                        if attendance_data[key]['clock_in'] is None or punch_datetime < attendance_data[key]['clock_in']:
-                            attendance_data[key]['clock_in'] = punch_datetime
-                            attendance_data[key]['terminal_alias_in'] = record.terminal_alias
-                    else:
-                        if attendance_data[key]['clock_out'] is None or punch_datetime > attendance_data[key]['clock_out']:
-                            attendance_data[key]['clock_out'] = punch_datetime
-                            attendance_data[key]['terminal_alias_out'] = record.terminal_alias
-                
-                except Exception as e:
-                    logger.error(f"خطأ في معالجة وقت البصمة: {punch_time_str} - {str(e)}")
-            
-            except Exception as e:
-                logger.error(f"خطأ في معالجة سجل مؤقت: {str(e)}")
-        
-        if missing_employee_codes:
-            logger.warning(f"عدد أكواد الموظفين الغير موجودة في قاعدة البيانات: {len(missing_employee_codes)}")
-            if len(missing_employee_codes) <= 10:
-                logger.warning(f"أكواد الموظفين المفقودة: {list(missing_employee_codes)}")
-        
-        logger.info(f"تم معالجة {processed_count} سجل حضور فريد من أصل {total_records} سجل مؤقت")
-        
-        # حساب ساعات العمل لكل سجل
-        update_sync_status("save", 80, "حساب ساعات العمل...", status="in_progress")
-        
-        # عداد سجلات بدون ساعات عمل
-        records_with_missing_hours = 0
-        for key, data in attendance_data.items():
-            if data['clock_in'] and data['clock_out']:
-                # تأكد من أن وقت الخروج بعد وقت الدخول
-                if data['clock_out'] > data['clock_in']:
-                    time_diff = data['clock_out'] - data['clock_in']
-                    hours = time_diff.total_seconds() / 3600
-                    data['work_hours'] = round(hours, 2)
-                    
-                    hours_int = int(hours)
-                    minutes = int((hours - hours_int) * 60)
-                    data['total_time'] = f"{hours_int}:{minutes:02d}"
-                else:
-                    # إذا كان وقت الخروج قبل وقت الدخول، افترض أن الموظف عمل أقل من 24 ساعة
-                    logger.warning(f"وقت خروج مبكر عن وقت الدخول للموظف {key[0]} بتاريخ {key[1]}, جاري التصحيح")
-                    next_day = datetime.combine(data['date'] + timedelta(days=1), data['clock_out'].time())
-                    time_diff = next_day - data['clock_in']
-                    hours = time_diff.total_seconds() / 3600
-                    if hours > 16:  # منطقي أن نفترض أنه خطأ إذا كانت الساعات أكثر من 16 ساعة
-                        hours = 8.0  # قيمة افتراضية معقولة
-                    data['work_hours'] = round(hours, 2)
-                    
-                    hours_int = int(hours)
-                    minutes = int((hours - hours_int) * 60)
-                    data['total_time'] = f"{hours_int}:{minutes:02d}"
-            else:
-                records_with_missing_hours += 1
-                
-                # تعيين قيم افتراضية للسجلات التي تفتقر إلى بصمة دخول أو خروج
-                if data['clock_in'] and not data['clock_out']:
-                    # إذا كانت هناك بصمة دخول فقط، افترض 8 ساعات عمل
-                    data['work_hours'] = 8.0
-                    data['total_time'] = "8:00"
-                    # إضافة بصمة خروج افتراضية (8 ساعات بعد الدخول)
-                    data['clock_out'] = data['clock_in'] + timedelta(hours=8)
-                    logger.debug(f"تعيين بصمة خروج افتراضية للموظف {key[0]} بتاريخ {key[1]}")
-                elif data['clock_out'] and not data['clock_in']:
-                    # إذا كانت هناك بصمة خروج فقط، افترض 8 ساعات عمل
-                    data['work_hours'] = 8.0
-                    data['total_time'] = "8:00"
-                    # إضافة بصمة دخول افتراضية (8 ساعات قبل الخروج)
-                    data['clock_in'] = data['clock_out'] - timedelta(hours=8)
-                    logger.debug(f"تعيين بصمة دخول افتراضية للموظف {key[0]} بتاريخ {key[1]}")
-        
-        logger.info(f"عدد سجلات الحضور مع بيانات كاملة: {len(attendance_data) - records_with_missing_hours}")
-        logger.info(f"عدد سجلات الحضور مع بيانات ناقصة (تم تصحيحها): {records_with_missing_hours}")
-
-        # البحث عن السجلات الموجودة حاليًا في قاعدة البيانات بشكل جماعي
-        existing_records = {}
-        employee_ids = [data['employee_id'] for data in attendance_data.values()]
-        dates = [data['date'] for data in attendance_data.values()]
-        
-        if employee_ids and dates:
-            for record in AttendanceRecord.query.filter(
-                AttendanceRecord.employee_id.in_(employee_ids),
-                AttendanceRecord.date.in_(dates)
-            ).all():
-                existing_records[(record.employee_id, record.date)] = record
-        
-        logger.info(f"عدد السجلات الموجودة مسبقاً في قاعدة البيانات: {len(existing_records)}")
-
-        # تجهيز سجلات للإضافة والتحديث
-        update_sync_status("save", 85, "تجهيز السجلات للإضافة والتحديث...", status="in_progress")
-        records_to_add = []
-        records_to_update = []
-
-        for key, data in attendance_data.items():
-            if key in existing_records:
-                # تحديث السجل الموجود
-                record = existing_records[key]
-                updated = False
-                if data['clock_in'] and (not record.clock_in or data['clock_in'] < record.clock_in):
-                    record.clock_in = data['clock_in']
-                    record.terminal_alias_in = data['terminal_alias_in']
-                    updated = True
-                if data['clock_out'] and (not record.clock_out or data['clock_out'] > record.clock_out):
-                    record.clock_out = data['clock_out']
-                    record.terminal_alias_out = data['terminal_alias_out']
-                    updated = True
-                if data.get('work_hours') and (not record.work_hours or abs(record.work_hours - data['work_hours']) > 0.01):
-                    record.work_hours = data['work_hours']
-                    record.total_time = data['total_time']
-                    updated = True
-                
-                if updated:
-                    records_to_update.append(record)
-            else:
-                # إضافة سجل جديد
-                new_record = AttendanceRecord(
-                    employee_id=data['employee_id'],
-                    date=data['date'],
-                    attendance_status=data['attendance_status'],
-                    weekday=data['weekday'],
-                    clock_in=data['clock_in'],
-                    clock_out=data['clock_out'],
-                    terminal_alias_in=data['terminal_alias_in'],
-                    terminal_alias_out=data['terminal_alias_out'],
-                    work_hours=data.get('work_hours'),
-                    total_time=data.get('total_time'),
-                    is_synced=True,  # تمييز السجل كمتزامن
-                    sync_id=sync_log.id  # ربط السجل بعملية المزامنة الحالية
-                )
-                records_to_add.append(new_record)
-                
-        logger.info(f"سجلات جديدة للإضافة: {len(records_to_add)}")
-        logger.info(f"سجلات موجودة للتحديث: {len(records_to_update)}")
-        
-        # Force at least one record to be added for debugging purposes when we have temp records but no synced records
-        if len(records_to_add) == 0 and len(records_to_update) == 0 and len(attendance_data) > 0:
-            logger.warning("لا توجد سجلات للإضافة أو التحديث رغم وجود بيانات للمعالجة! جاري محاولة إضافة أول سجل على الأقل للتصحيح")
-            sample_data = list(attendance_data.values())[0]
-            sample_record = AttendanceRecord(
-                employee_id=sample_data['employee_id'],
-                date=sample_data['date'],
-                attendance_status=sample_data['attendance_status'],
-                weekday=sample_data['weekday'],
-                clock_in=sample_data['clock_in'],
-                clock_out=sample_data['clock_out'],
-                terminal_alias_in=sample_data['terminal_alias_in'],
-                terminal_alias_out=sample_data['terminal_alias_out'],
-                work_hours=sample_data.get('work_hours', 8.0),
-                total_time=sample_data.get('total_time', '8:00'),
-                is_synced=True,
-                sync_id=sync_log.id,
-                notes="إضافة إلزامية لتصحيح مشكلة التزامن"
-            )
-            records_to_add.append(sample_record)
-            logger.info("تمت إضافة سجل واحد على الأقل لتصحيح مشكلة التزامن")
-
-        # إضافة وتحديث السجلات بشكل جماعي
-        update_sync_status("save", 90, f"إضافة {len(records_to_add)} سجل جديد وتحديث {len(records_to_update)} سجل...", status="in_progress")
-        synced_records = len(records_to_add) + len(records_to_update)
-
-        try:
-            # استخدام bulk_save_objects للإدخال الجماعي
-            if records_to_add:
-                db.session.bulk_save_objects(records_to_add)
-                logger.info(f"تم إدخال {len(records_to_add)} سجل جديد بطريقة جماعية")
-            
-            # استخدام التزام واحد بعد كل العمليات
-            db.session.commit()
-            logger.info(f"تم حفظ {synced_records} سجل في قاعدة البيانات")
-            update_sync_status("save", 90, f"تم حفظ {synced_records} سجل", status="in_progress")
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            error_message = f"خطأ في حفظ البيانات في قاعدة البيانات: {str(e)}"
-            logger.error(error_message)
-            update_sync_status("error", 0, error=error_message, status="error")
-            
-            # في حالة فشل الحفظ الجماعي، حاول الحفظ سجل بسجل للتعرف على السجل المتسبب في المشكلة
-            logger.info("محاولة تتبع السجل المتسبب في المشكلة...")
-            success_count = 0
-            
-            for record in records_to_add:
-                try:
-                    db.session.add(record)
-                    db.session.commit()
-                    success_count += 1
-                except Exception as e:
-                    db.session.rollback()
-                    logger.error(f"فشل إضافة سجل للموظف {record.employee_id} بتاريخ {record.date}: {str(e)}")
-            
-            logger.info(f"تم حفظ {success_count} سجل من أصل {len(records_to_add)} بطريقة فردية")
-            synced_records = success_count
-            
         if check_cancellation(sync_log, db):
             return 0
 
         # Step 7: Complete synchronization
         sync_log.status = "success"
         sync_log.records_synced = synced_records
-        sync_log.records_processed = records_processed
         sync_log.end_time = datetime.utcnow()
         sync_log.step = "complete"
         db.session.commit()
@@ -933,7 +798,7 @@ def simple_sync_data(app=None, request_start_date=None, request_end_date=None):
         # Update final status
         update_sync_status("complete", 100, f"تمت المزامنة بنجاح - {synced_records} سجل", records=synced_records, status="success")
         
-        logger.info(f"تمت عملية المزامنة بنجاح. تم مزامنة {synced_records} من {records_processed} سجل.")
+        logger.info(f"تمت عملية المزامنة بنجاح. تم مزامنة {synced_records} سجل.")
         return synced_records
 
     except Exception as e:

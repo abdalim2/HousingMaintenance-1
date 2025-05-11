@@ -69,11 +69,11 @@
         }
 
         .print-header .company-info {
-            text-align: {% if g.language == 'ar' %}right{% else %}left{% endif %};
+            text-align: {% if get_locale() == 'ar' %}right{% else %}left{% endif %};
         }
 
         .print-header .timesheet-info {
-            text-align: {% if g.language == 'ar' %}left{% else %}right{% endif %};
+            text-align: {% if get_locale() == 'ar' %}left{% else %}right{% endif %};
         }
 
         /* Table styling */
@@ -110,7 +110,7 @@
             background-color: #34495e;
             color: #fff;
             font-weight: bold;
-            text-align: {% if g.language == 'ar' %}right{% else %}left{% endif %};
+            text-align: {% if get_locale() == 'ar' %}right{% else %}left{% endif %};
             padding: 6px 8px !important;
             font-size: 11pt;
         }
@@ -182,7 +182,7 @@
         }
 
         .print-footer .page-info {
-            text-align: {% if g.language == 'ar' %}left{% else %}right{% endif %};
+            text-align: {% if get_locale() == 'ar' %}left{% else %}right{% endif %};
         }
 
         /* Status legend */
@@ -225,7 +225,7 @@
         }
 
         /* RTL specific adjustments */
-        {% if g.language == 'ar' %}
+        {% if get_locale() == 'ar' %}
         body {
             font-family: 'Segoe UI', 'Arial', 'Tahoma', sans-serif;
         }
@@ -304,15 +304,8 @@
                         </th>
                     {% endfor %}
                 </tr>
-            </thead>            <tbody>
-                <!-- Debug information -->
-                {% if not timesheet_data.employees %}
-                <tr>
-                    <td colspan="{{ 3 + timesheet_data.dates|length + 2 }}">
-                        No employee data available. Total employees: {{ timesheet_data.total_employees }}
-                    </td>
-                </tr>
-                {% else %}
+            </thead>
+            <tbody>
                 {% set housing_groups = {} %}
                 
                 <!-- Group employees by housing instead of device -->
@@ -335,35 +328,24 @@
                     
                     <!-- Employees for this housing -->
                     {% for employee in employees %}
-                    {% endif %}
                         <tr {% if loop.index is even %}class="even-row"{% endif %}>
                             <td>{{ employee.employee_code }}</td>
                             <td>{{ employee.name }}</td>
-                            <td>{{ employee.profession|default('') }}</td>                                <!-- Attendance cells with enhanced date handling -->
+                            <td>{{ employee.profession|default('') }}</td>
+                              <!-- Attendance cells -->
                             {% for date in timesheet_data.dates %}
                                 {% set day_str = date.strftime('%Y-%m-%d') %}
                                 {% set found_day = none %}
                                 {% for day in employee.attendance %}
-                                    {% set day_date = '' %}
-                                    {% if day.date is string %}
-                                        {% set day_date = day.date %}
-                                    {% else %}
-                                        {% set day_date = day.date.strftime('%Y-%m-%d') if day.date %}
-                                    {% endif %}
-                                    
-                                    {% if day_date == day_str %}
+                                    {% if day.date == day_str %}
                                         {% set found_day = day %}
                                     {% endif %}
                                 {% endfor %}
                                 
                                 {% if found_day %}
-                                    <td class="status-{{ found_day.status }}">{{ found_day.status }}</td>
+                                    <td class="status-{{ found_day.status }}">{{ found_day.value|default('') }}</td>
                                 {% else %}
-                                    {% if date.weekday() in timesheet_data.weekend_days %}
-                                        <td class="status-W">W</td>
-                                    {% else %}
-                                        <td>-</td>
-                                    {% endif %}
+                                    <td></td>
                                 {% endif %}
                             {% endfor %}
                               <!-- Totals -->

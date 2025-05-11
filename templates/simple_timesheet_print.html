@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timesheet Export</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: center;
+        }
+        
+        th {
+            background-color: #f0f0f0;
+        }
+        
+        .weekend {
+            background-color: #f5f5f5;
+        }
+        
+        .status-P { background-color: #e8f5e9; }
+        .status-A { background-color: #ffebee; }
+        .status-V { background-color: #e3f2fd; }
+        .status-W { background-color: #f5f5f5; }
+        
+        /* PDF-specific settings */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            @page {
+                size: landscape;
+                margin: 1cm;
+            }
+            
+            table {
+                page-break-inside: auto;
+            }
+            
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            
+            thead {
+                display: table-header-group;
+            }
+            
+            tfoot {
+                display: table-footer-group;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Monthly Timesheet: {{ timesheet_data.month_name|default('') }} {{ timesheet_data.year|default('') }}</h1>
+    
+    <div>
+        <p><strong>Department:</strong> {{ department_name|default('All Departments') }}</p>
+        <p><strong>Housing:</strong> {{ housing_name|default('All Housings') }}</p>
+        <p><strong>Generated:</strong> {{ export_date|default('') }}</p>
+        <p><strong>Report ID:</strong> {{ report_id|default('') }}</p>
+    </div>
+
+    <!-- Debug info that will be hidden in print -->
+    <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0; display: none;">
+        <p>Employee count: {{ timesheet_data.employees|length if timesheet_data.employees else 0 }}</p>
+        <p>Date count: {{ timesheet_data.dates|length if timesheet_data.dates else 0 }}</p>
+    </div>
+
+    {% if timesheet_data.employees and timesheet_data.employees|length > 0 and timesheet_data.dates and timesheet_data.dates|length > 0 %}
+    <table>
+        <thead>
+            <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Profession</th>
+                {% for date in timesheet_data.dates %}
+                <th {% if date.weekday is defined and date.weekday() in timesheet_data.weekend_days %}class="weekend"{% endif %}>
+                    {{ date.day if date.day is defined else date|string }}<br>
+                    {{ date.strftime('%a') if date.strftime is defined else '' }}
+                </th>
+                {% endfor %}
+                <th>Regular Hours</th>
+                <th>Overtime</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for employee in timesheet_data.employees %}
+            <tr>
+                <td>{{ employee.emp_code }}</td>
+                <td>{{ employee.name }}</td>
+                <td>{{ employee.profession|default('') }}</td>                {% for date in timesheet_data.dates %}
+                    {% set date_str = date.strftime('%Y-%m-%d') if date.strftime else date|string %}
+                    {% set found = false %}
+                    {% set status = '' %}
+                      {% for attendance in employee.attendance %}
+                        {% if attendance %}
+                            {# Use the pre-processed date_str if available #}
+                            {% set att_date = attendance.date_str if attendance.date_str is defined else '' %}
+                            
+                            {# Fallback to manually processing the date if date_str isn't available #}
+                            {% if not att_date and attendance.date is defined %}
+                                {% if attendance.date is string %}
+                                    {% set att_date = attendance.date %}
+                                {% elif attendance.date.strftime is defined %}
+                                    {% set att_date = attendance.date.strftime('%Y-%m-%d') %}
+                                {% else %}
+                                    {% set att_date = attendance.date|string %}
+                                {% endif %}
+                            {% endif %}
+                            
+                            {% if att_date == date_str %}
+                                {% set found = true %}
+                                {% set status = attendance.status %}
+                                {# Break the loop for efficiency since we found a match #}
+                                {% break %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if found %}
+                        <td class="status-{{ status }}">{{ status }}</td>
+                    {% else %}
+                        {% if date.weekday is defined and date.weekday() in timesheet_data.weekend_days %}
+                            <td class="status-W">W</td>
+                        {% else %}
+                            <td>-</td>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+                
+                <td>{{ employee.total_work_hours|default(0)|round(1) }}</td>
+                <td>{{ employee.total_overtime_hours|default(0)|round(1) }}</td>
+            </tr>            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="border: 2px solid #f44336; padding: 20px; text-align: center; margin: 30px 0;">
+        <h3>No timesheet data available for the selected period.</h3>
+        <p>Please try selecting a different month or department, or contact system administrator.</p>
+    </div>
+    {% endif %}
+    
+    <div style="margin-top: 20px;">
+        <h4>Legend:</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+            <div><span style="display: inline-block; width: 20px; height: 15px; background-color: #e8f5e9;"></span> P = Present</div>
+            <div><span style="display: inline-block; width: 20px; height: 15px; background-color: #ffebee;"></span> A = Absent</div>
+            <div><span style="display: inline-block; width: 20px; height: 15px; background-color: #e3f2fd;"></span> V = Vacation</div>
+            <div><span style="display: inline-block; width: 20px; height: 15px; background-color: #fff8e1;"></span> S = Sick</div>
+            <div><span style="display: inline-block; width: 20px; height: 15px; background-color: #f5f5f5;"></span> W = Weekend</div>
+        </div>
+    </div>
+    
+    <div style="margin-top: 30px; display: flex; justify-content: space-between;">
+        <div style="width: 30%; text-align: center;">
+            <div style="margin-top: 40px; border-top: 1px solid black; padding-top: 5px;">Prepared By</div>
+        </div>
+        <div style="width: 30%; text-align: center;">
+            <div style="margin-top: 40px; border-top: 1px solid black; padding-top: 5px;">Approved By</div>
+        </div>
+        <div style="width: 30%; text-align: center;">
+            <div style="margin-top: 40px; border-top: 1px solid black; padding-top: 5px;">Department Manager</div>
+        </div>
+    </div>
+    
+    <script>
+        window.onload = function() {
+            // Wait a moment to ensure all styles are applied and the page is fully rendered
+            setTimeout(function() {
+                window.print();
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
