@@ -15,7 +15,7 @@ translations = {
         'sync_status': 'BioTime Sync Status',
         'connected': 'Connected',
         'disconnected': 'Disconnected',
-        
+
         # Settings page
         'biotime_settings': 'BioTime API Settings',
         'api_url': 'API URL',
@@ -42,7 +42,16 @@ translations = {
         'english': 'English',
         'arabic': 'Arabic',
         'save_settings': 'Save Settings',
-        
+        'quick_date_selection': 'Quick Date Selection',
+        'today': 'Today',
+        'yesterday': 'Yesterday',
+        'this_week': 'This Week',
+        'last_week': 'Last Week',
+        'this_month': 'This Month',
+        'last_month': 'Last Month',
+        'custom_month': 'Custom Month',
+        'apply': 'Apply',
+
         # Timesheet page
         'generated': 'Generated',
         'report_id': 'Report ID',
@@ -96,7 +105,7 @@ translations = {
         'transfer': 'Transfer',
         'sick': 'Sick',
         'eid': 'Eid',
-        
+
         # Departments page
         'departments_management': 'Departments Management',
         'departments_list': 'Departments List',
@@ -117,7 +126,7 @@ translations = {
         'department_has_employees': 'This department has employees',
         'move_employees_first': 'Please move employees to another department first',
         'name': 'Name',
-        
+
         # Department details page
         'department_details': 'Department Details',
         'basic_info': 'Basic Information',
@@ -139,7 +148,7 @@ translations = {
         'error_loading_employees': 'Error loading employees',
         'error_loading_statistics': 'Error loading statistics',
         'attendance_last_30_days': 'Attendance distribution for the last 30 days',
-        
+
         # Employee Status Management
         'employee_status': 'Employee Status',
         'employee_vacations': 'Employee Vacations',
@@ -172,10 +181,10 @@ translations = {
         'no_vacations': 'No vacations found',
         'no_transfers': 'No transfers found',
         'transfer_data': 'Transfer data',
-        
+
         # AI Analytics page
         'ai_analytics': 'AI Analytics',
-        'anomaly_detection': 'Anomaly Detection', 
+        'anomaly_detection': 'Anomaly Detection',
         'anomaly_detection_description': 'Use AI to identify unusual attendance patterns and inconsistencies in biometric data.',
         'run_analysis': 'Run Analysis',
         'attendance_prediction': 'Attendance Prediction',
@@ -194,7 +203,7 @@ translations = {
         'optimizations_suggested': 'Optimizations Suggested',
         'clusters_identified': 'Clusters Identified',
         'ai_metrics': 'AI Metrics',
-        
+
         # Print Report
         'print_report': 'Print Report',
         'executive_summary': 'Executive Summary',
@@ -234,7 +243,7 @@ translations = {
         'sync_status': 'حالة المزامنة',
         'connected': 'متصل',
         'disconnected': 'غير متصل',
-        
+
         # Settings page
         'biotime_settings': 'إعدادات BioTime API',
         'api_url': 'رابط API',
@@ -261,7 +270,16 @@ translations = {
         'english': 'الإنجليزية',
         'arabic': 'العربية',
         'save_settings': 'حفظ الإعدادات',
-        
+        'quick_date_selection': 'اختيار سريع للتاريخ',
+        'today': 'اليوم',
+        'yesterday': 'الأمس',
+        'this_week': 'هذا الأسبوع',
+        'last_week': 'الأسبوع الماضي',
+        'this_month': 'هذا الشهر',
+        'last_month': 'الشهر الماضي',
+        'custom_month': 'شهر مخصص',
+        'apply': 'تطبيق',
+
         # Timesheet page
         'generated': 'تاريخ الإنشاء',
         'report_id': 'رقم التقرير',
@@ -315,7 +333,7 @@ translations = {
         'transfer': 'نقل',
         'sick': 'مرضي',
         'eid': 'عيد',
-        
+
         # Departments page
         'departments_management': 'إدارة الأقسام',
         'departments_list': 'قائمة الأقسام',
@@ -336,7 +354,7 @@ translations = {
         'department_has_employees': 'هذا القسم يحتوي على موظفين',
         'move_employees_first': 'الرجاء نقل الموظفين إلى قسم آخر أولاً',
         'name': 'الاسم',
-        
+
         # Department details page
         'department_details': 'تفاصيل القسم',
         'basic_info': 'المعلومات الأساسية',
@@ -358,7 +376,7 @@ translations = {
         'error_loading_employees': 'خطأ في تحميل بيانات الموظفين',
         'error_loading_statistics': 'خطأ في تحميل الإحصائيات',
         'attendance_last_30_days': 'توزيع الحضور خلال الـ 30 يوم الماضية',
-        
+
         # Employee Status Management
         'employee_status': 'حالة الموظفين',
         'employee_vacations': 'إجازات الموظفين',
@@ -391,10 +409,10 @@ translations = {
         'no_vacations': 'لم يتم العثور على إجازات',
         'no_transfers': 'لم يتم العثور على تحويلات',
         'transfer_data': 'بيانات التحويل',
-        
+
         # AI Analytics page
         'ai_analytics': 'تحليلات الذكاء الاصطناعي',
-        'anomaly_detection': 'كشف الأنماط غير العادية', 
+        'anomaly_detection': 'كشف الأنماط غير العادية',
         'anomaly_detection_description': 'استخدم الذكاء الاصطناعي لتحديد أنماط الحضور غير العادية والاستثناءات في بيانات البصمة.',
         'run_analysis': 'تشغيل التحليل',
         'attendance_prediction': 'التنبؤ بالحضور',
@@ -413,7 +431,7 @@ translations = {
         'optimizations_suggested': 'التحسينات المقترحة',
         'clusters_identified': 'المجموعات المحددة',
         'ai_metrics': 'مقاييس الذكاء الاصطناعي',
-        
+
         # Print Report
         'print_report': 'تقرير للطباعة',
         'executive_summary': 'ملخص تنفيذي',
@@ -426,7 +444,7 @@ translations = {
         'total_employees': 'إجمالي الموظفين',
         'average_attendance': 'متوسط الحضور',
         'report_date': 'تاريخ التقرير',
-        
+
         # Common        'save': 'حفظ',
         'cancel': 'إلغاء',
         'delete': 'حذف',
@@ -449,17 +467,17 @@ def get_text(key, language='en'):
     """
     Get translated text for the given key in the specified language
     Falls back to English if translation not found
-    
+
     Args:
         key: The translation key
         language: The language code ('en' or 'ar')
-        
+
     Returns:
         str: Translated text
     """
     if language not in translations:
         language = 'en'
-        
+
     if key in translations[language]:
         return translations[language][key]
     elif key in translations['en']:

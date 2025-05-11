@@ -1,0 +1,230 @@
+/* 
+ * تنسيقات خاصة بطباعة التقارير
+ * تصميم فخم ومرتب للمدراء
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+
+@page {
+    size: A4;
+    margin: 1.5cm;
+}
+
+body {
+    font-family: 'Tajawal', Arial, sans-serif;
+    line-height: 1.5;
+    color: #333;
+    background-color: white;
+    margin: 0;
+    padding: 0;
+}
+
+.print-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* رأس التقرير */
+.report-header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #1a5276;
+    padding-bottom: 20px;
+    position: relative;
+}
+
+.report-logo {
+    max-width: 150px;
+    margin-bottom: 15px;
+}
+
+.report-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #1a5276;
+    margin: 10px 0;
+}
+
+.report-subtitle {
+    font-size: 18px;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.report-date {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-bottom: 10px;
+}
+
+/* معلومات التقرير */
+.report-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #3498db;
+}
+
+.report-info-item {
+    flex: 1;
+    padding: 0 15px;
+}
+
+.report-info-label {
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.report-info-value {
+    color: #34495e;
+}
+
+/* جدول البيانات */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.report-table th {
+    background-color: #1a5276;
+    color: white;
+    padding: 12px 15px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.report-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+}
+
+.report-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.report-table tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* تذييل التقرير */
+.report-footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+    text-align: center;
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.report-signature {
+    margin-top: 50px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.signature-box {
+    width: 200px;
+    text-align: center;
+}
+
+.signature-line {
+    border-top: 1px solid #333;
+    margin-bottom: 5px;
+}
+
+.signature-name {
+    font-weight: bold;
+}
+
+.signature-title {
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+/* ملخص البيانات */
+.report-summary {
+    margin: 30px 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #27ae60;
+}
+
+.summary-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 15px;
+}
+
+.summary-items {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.summary-item {
+    flex: 1;
+    min-width: 200px;
+    margin: 10px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.summary-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #3498db;
+    margin-bottom: 5px;
+}
+
+.summary-label {
+    color: #7f8c8d;
+}
+
+/* تنسيقات خاصة بالطباعة */
+@media print {
+    body {
+        font-size: 12pt;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+    
+    .page-break {
+        page-break-before: always;
+    }
+    
+    a {
+        text-decoration: none;
+        color: #333;
+    }
+    
+    .report-table {
+        page-break-inside: avoid;
+    }
+    
+    .report-table th {
+        background-color: #1a5276 !important;
+        color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .report-table tr:nth-child(even) {
+        background-color: #f8f9fa !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}

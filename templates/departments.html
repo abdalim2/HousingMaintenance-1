@@ -42,12 +42,12 @@
                                 <tr>
                                     <td>{{ dept.id }}</td>
                                     <td>
-                                        <a href="#" class="view-department-details" 
-                                           data-id="{{ dept.id }}" 
-                                           data-name="{{ dept.name }}" 
+                                        <a href="#" class="view-department-details"
+                                           data-id="{{ dept.id }}"
+                                           data-name="{{ dept.name }}"
                                            data-biotime-id="{{ dept.dept_id }}"
                                            data-employees-count="{{ dept.employees|length }}"
-                                           data-bs-toggle="modal" 
+                                           data-bs-toggle="modal"
                                            data-bs-target="#viewDepartmentModal">
                                             {{ dept.name }}
                                         </a>
@@ -62,29 +62,29 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-primary view-department-details" 
+                                        <button class="btn btn-sm btn-primary view-department-details"
                                                 data-id="{{ dept.id }}"
                                                 data-name="{{ dept.name }}"
                                                 data-biotime-id="{{ dept.dept_id }}"
                                                 data-employees-count="{{ dept.employees|length }}"
-                                                data-bs-toggle="modal" 
+                                                data-bs-toggle="modal"
                                                 data-bs-target="#viewDepartmentModal">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-info edit-department" 
+                                        <button class="btn btn-sm btn-info edit-department"
                                                 data-id="{{ dept.id }}"
                                                 data-name="{{ dept.name }}"
                                                 data-biotime-id="{{ dept.dept_id }}"
                                                 data-active="{{ dept.active }}"
-                                                data-bs-toggle="modal" 
+                                                data-bs-toggle="modal"
                                                 data-bs-target="#editDepartmentModal">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-danger delete-department" 
-                                                data-id="{{ dept.id }}" 
-                                                data-name="{{ dept.name }}" 
+                                        <button class="btn btn-sm btn-danger delete-department"
+                                                data-id="{{ dept.id }}"
+                                                data-name="{{ dept.name }}"
                                                 data-employees="{{ dept.employees|length }}"
-                                                data-bs-toggle="modal" 
+                                                data-bs-toggle="modal"
                                                 data-bs-target="#deleteDepartmentModal">
                                             <i class="fas fa-trash"></i>
                                         </button>
@@ -165,7 +165,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">{{ t('department_employees') }}</h6>
@@ -180,8 +180,9 @@
                                         <th>{{ t('name') }}</th>
                                         <th>{{ t('profession') }}</th>
                                         <th>{{ t('housing') }}</th>
+                                        <th>{{ t('daily_hours') }}</th>
                                         <th>{{ t('status') }}</th>
-                                        <th>{{ t('view_details') }}</th>
+                                        <th>{{ t('actions') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="employees_list">
@@ -296,6 +297,47 @@
         </div>
     </div>
 </div>
+<!-- Edit Employee Modal -->
+<div class="modal fade" id="editEmployeeModal" tabindex="-1" aria-labelledby="editEmployeeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="editEmployeeModalLabel">{{ t('edit_employee') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editEmployeeForm" action="{{ url_for('update_employee') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_employee_id" name="employee_id">
+                    <div class="mb-3">
+                        <label for="edit_employee_code" class="form-label">{{ t('employee_code') }}</label>
+                        <input type="text" class="form-control" id="edit_employee_code" name="emp_code" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_employee_name" class="form-label">{{ t('name') }} *</label>
+                        <input type="text" class="form-control" id="edit_employee_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_employee_profession" class="form-label">{{ t('profession') }}</label>
+                        <input type="text" class="form-control" id="edit_employee_profession" name="profession">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_employee_daily_hours" class="form-label">{{ t('daily_hours') }}</label>
+                        <input type="number" class="form-control" id="edit_employee_daily_hours" name="daily_hours" step="0.5" min="1" max="12" value="8.0">
+                        <div class="form-text">{{ t('daily_hours_help_text') }}</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="edit_employee_active" name="active">
+                        <label class="form-check-label" for="edit_employee_active">{{ t('is_active') }}</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') }}</button>
+                    <button type="submit" class="btn btn-info">{{ t('update') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -310,14 +352,14 @@
                 var name = this.getAttribute('data-name');
                 var biotimeId = this.getAttribute('data-biotime-id');
                 var active = this.getAttribute('data-active') === 'True';
-                
+
                 document.getElementById('edit_department_id').value = id;
                 document.getElementById('edit_department_name').value = name;
                 document.getElementById('edit_biotime_id').value = biotimeId;
                 document.getElementById('edit_active').checked = active;
             });
         });
-        
+
         // Delete department modal
         var deleteBtns = document.querySelectorAll('.delete-department');
         deleteBtns.forEach(function(btn) {
@@ -325,14 +367,14 @@
                 var id = this.getAttribute('data-id');
                 var name = this.getAttribute('data-name');
                 var employeesCount = parseInt(this.getAttribute('data-employees'));
-                
+
                 document.getElementById('delete_department_id').value = id;
                 document.getElementById('delete_confirmation_message').innerText = `{{ t('delete_department_confirmation') }} "${name}"?`;
-                
+
                 // Show warning if department has employees
                 var employeesWarning = document.getElementById('employees_warning');
                 var confirmDeleteBtn = document.getElementById('confirm_delete');
-                
+
                 if (employeesCount > 0) {
                     employeesWarning.classList.remove('d-none');
                     document.getElementById('employees_warning_text').innerText = `{{ t('department_has_employees') }} (${employeesCount}). {{ t('move_employees_first') }}`;
@@ -343,7 +385,7 @@
                 }
             });
         });
-        
+
         // View department details modal
         var viewBtns = document.querySelectorAll('.view-department-details');
         viewBtns.forEach(function(btn) {
@@ -352,29 +394,29 @@
                 var name = this.getAttribute('data-name');
                 var biotimeId = this.getAttribute('data-biotime-id');
                 var employeesCount = this.getAttribute('data-employees-count');
-                
+
                 // Set basic department info
                 document.getElementById('view_dept_id').innerText = id;
                 document.getElementById('view_dept_name').innerText = name;
                 document.getElementById('view_biotime_id').innerText = biotimeId;
                 document.getElementById('view_employees_count').innerText = employeesCount;
-                
+
                 // Update performance link
                 document.getElementById('view_employee_performance_link').href = `/employee_performance?department_id=${id}`;
-                
+
                 // Load employees list
                 loadDepartmentEmployees(id);
-                
+
                 // Load department statistics
                 loadDepartmentStatistics(id);
             });
         });
-        
+
         // Search functionality for employees table
         document.getElementById('employeeSearchInput').addEventListener('keyup', function() {
             var input = this.value.toLowerCase();
             var rows = document.querySelectorAll("#employees_list tr");
-            
+
             rows.forEach(function(row) {
                 var text = row.textContent.toLowerCase();
                 if (text.indexOf(input) > -1) {
@@ -384,7 +426,7 @@
                 }
             });
         });
-        
+
         // Function to load employees for a department
         function loadDepartmentEmployees(departmentId) {
             var employeesList = document.getElementById('employees_list');
@@ -398,7 +440,7 @@
                     </td>
                 </tr>
             `;
-            
+
             fetch(`/api/departments/${departmentId}/employees`)
                 .then(response => response.json())
                 .then(data => {
@@ -411,15 +453,29 @@
                                 <td>${employee.name}</td>
                                 <td>${employee.profession || '-'}</td>
                                 <td>${employee.housing_name || '-'}</td>
+                                <td>${employee.daily_hours || '8.0'}</td>
                                 <td>
-                                    ${employee.active 
-                                      ? '<span class="badge bg-success">{{ t('active') }}</span>' 
+                                    ${employee.active
+                                      ? '<span class="badge bg-success">{{ t('active') }}</span>'
                                       : '<span class="badge bg-danger">{{ t('inactive') }}</span>'}
                                 </td>
                                 <td>
-                                    <a href="/employee_performance?employee_id=${employee.id}" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-user"></i>
-                                    </a>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/employee_performance?employee_id=${employee.id}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-user"></i>
+                                        </a>
+                                        <button class="btn btn-sm btn-info edit-employee-btn"
+                                                data-id="${employee.id}"
+                                                data-name="${employee.name}"
+                                                data-emp-code="${employee.emp_code}"
+                                                data-profession="${employee.profession || ''}"
+                                                data-daily-hours="${employee.daily_hours || '8.0'}"
+                                                data-active="${employee.active}"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editEmployeeModal">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             `;
                             employeesList.appendChild(row);
@@ -441,18 +497,18 @@
                     `;
                 });
         }
-        
+
         // Function to load department statistics
         function loadDepartmentStatistics(departmentId) {
             document.getElementById('loading_stats').classList.remove('d-none');
             document.getElementById('stats_content').classList.add('d-none');
-            
+
             fetch(`/api/departments/${departmentId}/statistics`)
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('loading_stats').classList.add('d-none');
                     document.getElementById('stats_content').classList.remove('d-none');
-                    
+
                     // Create attendance chart
                     var ctx = document.getElementById('deptAttendanceChart').getContext('2d');
                     var attendanceData = {
@@ -467,11 +523,11 @@
                             backgroundColor: ['#28a745', '#dc3545', '#17a2b8', '#ffc107']
                         }]
                     };
-                    
+
                     if (window.attendanceChart) {
                         window.attendanceChart.destroy();
                     }
-                    
+
                     window.attendanceChart = new Chart(ctx, {
                         type: 'doughnut',
                         data: attendanceData,
@@ -496,6 +552,26 @@
                     `;
                 });
         }
+
+        // Event delegation for edit employee buttons (since they're dynamically created)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.edit-employee-btn')) {
+                const btn = e.target.closest('.edit-employee-btn');
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                const empCode = btn.getAttribute('data-emp-code');
+                const profession = btn.getAttribute('data-profession');
+                const dailyHours = btn.getAttribute('data-daily-hours');
+                const active = btn.getAttribute('data-active') === 'true';
+
+                document.getElementById('edit_employee_id').value = id;
+                document.getElementById('edit_employee_code').value = empCode;
+                document.getElementById('edit_employee_name').value = name;
+                document.getElementById('edit_employee_profession').value = profession;
+                document.getElementById('edit_employee_daily_hours').value = dailyHours;
+                document.getElementById('edit_employee_active').checked = active;
+            }
+        });
     });
 </script>
 {% endblock %}

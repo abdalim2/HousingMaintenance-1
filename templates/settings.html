@@ -15,7 +15,7 @@
                         <label for="biotime_url" class="form-label">{{ t('api_url') }}</label>
                         <input type="text" class="form-control" id="biotime_url" name="biotime_url" value="{{ sync_settings.api_url }}">
                     </div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="biotime_username" class="form-label">{{ t('username') }}</label>
@@ -27,7 +27,7 @@
                             <div class="form-text">Leave as '********' to keep current password</div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="sync_interval" class="form-label">{{ t('sync_interval') }}</label>
                         <select class="form-select" id="sync_interval" name="sync_interval">
@@ -39,37 +39,87 @@
                             <option value="24" {% if sync_settings.interval == '24' %}selected{% endif %}>Once daily</option>
                         </select>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="departments" class="form-label">{{ t('departments') }} (comma-separated IDs)</label>
                         <input type="text" class="form-control" id="departments" name="departments" value="{{ sync_settings.departments }}">
                         <div class="form-text">Example: 11,6,3,18,15,19,23,10,9,5,4,26,21</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label class="form-label">{{ t('date_range') }}</label>
                         <div class="row">
                             <div class="col-md-6">
-                                <!-- Removed form-floating and simplified structure -->
                                 <div class="mb-2">
                                     <label for="start_date" class="form-label">{{ t('start_date') }}</label>
                                     <input type="date" class="form-control" id="start_date" name="start_date" value="{{ sync_settings.start_date }}">
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <!-- Removed form-floating and simplified structure -->
                                 <div class="mb-2">
                                     <label for="end_date" class="form-label">{{ t('end_date') }}</label>
                                     <input type="date" class="form-control" id="end_date" name="end_date" value="{{ sync_settings.end_date }}">
                                 </div>
                             </div>
                         </div>
-                        <!-- Added an alert box to highlight importance of date selection -->
+
+                        <!-- Quick date selection options -->
+                        <div class="mt-2 mb-2">
+                            <label class="form-label">{{ t('quick_date_selection') or 'Quick Date Selection' }}</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="today">
+                                    {{ t('today') or 'Today' }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="yesterday">
+                                    {{ t('yesterday') or 'Yesterday' }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="this_week">
+                                    {{ t('this_week') or 'This Week' }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="last_week">
+                                    {{ t('last_week') or 'Last Week' }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="this_month">
+                                    {{ t('this_month') or 'This Month' }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="last_month">
+                                    {{ t('last_month') or 'Last Month' }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary date-preset" data-preset="custom_month">
+                                    {{ t('custom_month') or 'Custom Month' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Month selection for custom month -->
+                        <div id="custom-month-selector" class="mt-2 mb-2 d-none">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <select class="form-select" id="custom_month">
+                                        {% for i in range(1, 13) %}
+                                            <option value="{{ i }}">{{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <select class="form-select" id="custom_year">
+                                        {% for year in range(2023, 2026) %}
+                                            <option value="{{ year }}">{{ year }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary mt-2" id="apply-custom-month">
+                                {{ t('apply') or 'Apply' }}
+                            </button>
+                        </div>
+
+                        <!-- Alert box to highlight importance of date selection -->
                         <div class="alert alert-info mt-2 mb-0">
                             <i class="fas fa-info-circle me-1"></i> {{ t('select_dates_for_sync') or 'Select both dates to control the sync date range' }}
                         </div>
                     </div>
-                    
+
                     <!-- Language Settings -->
                     <div class="mb-3">
                         <label for="language" class="form-label">{{ t('language') }}</label>
@@ -88,7 +138,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label class="form-label">{{ t('sync_status') }}</label>
                         <div id="sync-status-container">
@@ -112,7 +162,7 @@
                                 {% endif %}
                             </div>
                         </div>
-                        
+
                         <!-- Agregar el elemento sync-steps que estaba faltando -->
                         <div id="sync-steps" class="mt-3 d-none">
                             <div class="fw-bold mb-2">{{ t('sync_progress') }}</div>
@@ -138,7 +188,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary flex-fill">
                             <i class="fas fa-save"></i> {{ t('save_settings') }}
@@ -155,9 +205,40 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-6 mb-4">
         <div class="card bg-dark">
+            <div class="card-header">
+                <h5 class="card-title mb-0">File Storage Settings</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('save_system_settings') }}" method="post">
+                    <div class="mb-3">
+                        <label for="sharepoint_url" class="form-label">SharePoint Folder URL</label>
+                        <input type="text" class="form-control" id="sharepoint_url" name="sharepoint_url"
+                               value="{{ system_settings.get('sharepoint_url', 'https://cpcholding0.sharepoint.com/:f:/s/SacodecoHousing/EhzAcv7ftdZOiv2VX3yihO4BFUObApyWXfMoeXUV4OLCvg?e=UAmx11') }}">
+                        <div class="form-text">Enter the URL of the SharePoint folder where files will be stored.</div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> SharePoint Integration:</h6>
+                        <ul class="mb-0">
+                            <li>This URL will be used for storing and accessing files in SharePoint</li>
+                            <li>Make sure the URL is accessible to all users who need to view the files</li>
+                            <li>The URL should point to a folder, not a specific file</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Storage Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card bg-dark mt-3">
             <div class="card-header">
                 <h5 class="card-title mb-0">Manual Sync</h5>
             </div>
@@ -168,7 +249,7 @@
                         <input class="form-control" type="file" id="sync_file" name="sync_file" accept=".txt">
                         <div class="form-text">Upload a tab-separated text file exported from BioTime with the same format as the API response.</div>
                     </div>
-                    
+
                     <div class="alert alert-info">
                         <h6><i class="fas fa-info-circle"></i> File Requirements:</h6>
                         <ul class="mb-0">
@@ -177,7 +258,7 @@
                             <li>The file format should match the BioTime API export format</li>
                         </ul>
                     </div>
-                    
+
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-upload"></i> Upload & Process File
@@ -186,7 +267,7 @@
                 </form>
             </div>
         </div>
-        
+
         <div class="card bg-dark mt-3">
             <div class="card-header">
                 <h5 class="card-title mb-0">Timesheet Settings</h5>
@@ -201,7 +282,7 @@
                             <option value="next">Next Month</option>
                         </select>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="weekend_days" class="form-label">Weekend Days</label>
                         <select class="form-select" id="weekend_days" name="weekend_days[]" multiple>
@@ -215,7 +296,7 @@
                         </select>
                         <div class="form-text">Hold Ctrl/Cmd to select multiple days</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label class="form-label">Attendance Status Colors</label>
                         <div class="row g-2">
@@ -257,7 +338,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="d-grid">
                         <button type="button" class="btn btn-primary" id="save-appearance-settings">
                             <i class="fas fa-save"></i> Save Appearance Settings
@@ -278,7 +359,7 @@
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i> These dates will be used as a reference for selecting months in the timesheet.
                         </div>
-                        
+
                         <div class="table-responsive">
                             <table class="table table-dark table-hover">
                                 <thead>
@@ -293,7 +374,7 @@
                                     <tr>
                                         <td>{{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}</td>
                                         <td>
-                                            <input type="date" class="form-control" id="month_{{ i }}_start" name="month_{{ i }}_start" 
+                                            <input type="date" class="form-control" id="month_{{ i }}_start" name="month_{{ i }}_start"
                                                 value="{{ month_dates[i].start if month_dates and i in month_dates else '' }}">
                                         </td>
                                         <td>
@@ -306,7 +387,7 @@
                             </table>
                         </div>
                     </div>
-                    
+
                     <div class="d-grid">
                         <button type="button" class="btn btn-primary" id="save-month-config">
                             <i class="fas fa-save"></i> Save Month Configuration
@@ -325,7 +406,7 @@
                     <i class="fas fa-info-circle me-2"></i> يمكنك تحديث معلومات سكن الموظفين تلقائياً بناءً على أجهزة البصمة التي يستخدمونها.
                     سيقوم النظام بتحليل سجلات الحضور ومعرفة أجهزة البصمة المستخدمة لكل موظف وربطه بالسكن المناسب.
                 </div>
-                
+
                 <form action="{{ url_for('update_housing_assignments') }}" method="post">
                     <div class="d-grid">
                         <button type="submit" class="btn btn-warning">
@@ -352,7 +433,7 @@
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i> يمكنك ربط أجهزة البصمة بالسكن من هنا، وسيتم تجميع بيانات الحضور (التايم شيت) حسب السكن وليس حسب كل جهاز بصمة.
                 </div>
-                
+
                 <div class="table-responsive">
                     <table class="table table-dark table-hover" id="housing-table">
                         <thead>
@@ -372,16 +453,16 @@
                                         <td>{{ housing.terminals|length }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm" role="group">
-                                                <button type="button" class="btn btn-info btn-sm view-terminals-btn" 
+                                                <button type="button" class="btn btn-info btn-sm view-terminals-btn"
                                                     data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}">
                                                     <i class="fas fa-eye"></i> أجهزة البصمة
                                                 </button>
-                                                <button type="button" class="btn btn-primary btn-sm edit-housing-btn" 
-                                                    data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}" 
+                                                <button type="button" class="btn btn-primary btn-sm edit-housing-btn"
+                                                    data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}"
                                                     data-housing-location="{{ housing.location }}" data-housing-description="{{ housing.description }}">
                                                     <i class="fas fa-edit"></i> تعديل
                                                 </button>
-                                                <button type="button" class="btn btn-danger btn-sm delete-housing-btn" 
+                                                <button type="button" class="btn btn-danger btn-sm delete-housing-btn"
                                                     data-housing-id="{{ housing.id }}" data-housing-name="{{ housing.name }}">
                                                     <i class="fas fa-trash"></i> حذف
                                                 </button>
@@ -415,7 +496,7 @@
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i> قم بربط أجهزة البصمة بالسكن المناسب ليتم تجميع بيانات الحضور حسب السكن.
                 </div>
-                
+
                 <div class="table-responsive">
                     <table class="table table-dark table-hover" id="terminals-table">
                         <thead>
@@ -546,18 +627,18 @@
                     <h5><i class="fas fa-exclamation-triangle me-2"></i>تحذير!</h5>
                     <p>هذه العملية ستؤدي إلى حذف جميع سجلات الدوامات وسجلات المزامنة من قاعدة البيانات. لا يمكن التراجع عن هذه العملية بعد تنفيذها!</p>
                 </div>
-                
+
                 <form action="{{ url_for('reset_attendance_data') }}" method="post">
                     <div class="mb-3">
                         <label for="confirmation" class="form-label">لتأكيد الحذف، اكتب "CONFIRM_DELETE" في الحقل أدناه:</label>
                         <input type="text" class="form-control" id="confirmation" name="confirmation" required placeholder="اكتب CONFIRM_DELETE للتأكيد">
                     </div>
-                    
+
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="sync_after_delete" name="sync_after_delete">
                         <label class="form-check-label" for="sync_after_delete">إعادة مزامنة البيانات بعد الحذف مباشرةً</label>
                     </div>
-                    
+
                     <div class="d-grid">
                         <button type="submit" class="btn btn-danger" onclick="return confirmDataDelete()">
                             <i class="fas fa-trash-alt me-2"></i>حذف البيانات وإعادة المزامنة
@@ -778,6 +859,11 @@
 
 {% block scripts %}
 <script>
+// Pass month configuration data to JavaScript
+window.monthDatesConfig = {{ month_dates|tojson|safe }};
+</script>
+<script src="{{ url_for('static', filename='js/date_presets.js') }}"></script>
+<script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize tooltips
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -793,11 +879,11 @@
                     // إظهار أيقونة التحميل
                     this.disabled = true;
                     this.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> جاري المزامنة...';
-                    
+
                     // الحصول على قيم التاريخ من النموذج
                     const startDate = document.getElementById('start_date').value;
                     const endDate = document.getElementById('end_date').value;
-                    
+
                     // تحضير عنوان URL للطلب مع معلمات التاريخ
                     let syncUrl = "{{ url_for('trigger_sync') }}";
                     if (startDate || endDate) {
@@ -806,23 +892,23 @@
                         if (startDate && endDate) syncUrl += '&';
                         if (endDate) syncUrl += `end_date=${endDate}`;
                     }
-                    
+
                     // إظهار خطوات المزامنة
                     const syncStepsEl = document.getElementById('sync-steps');
                     if (syncStepsEl) {
                         syncStepsEl.classList.remove('d-none');
                     }
-                    
+
                     // تحديث حالة المزامنة
                     updateSyncStatus('in_progress', 'بدأت عملية المزامنة...');
-                    
+
                     // تعيين حالة الخطوات
                     setStepStatus('connect', 'pending');
                     setStepStatus('download', 'waiting');
                     setStepStatus('process', 'waiting');
                     setStepStatus('save', 'waiting');
                     setStepStatus('complete', 'waiting');
-                    
+
                     // إظهار شريط التقدم
                     const container = document.getElementById('sync-status-container');
                     if (container && !container.querySelector('.progress')) {
@@ -837,7 +923,7 @@
                             </form>
                         `;
                     }
-                    
+
                     // بدء المزامنة
                     fetch(syncUrl, {
                         method: 'POST',
@@ -881,35 +967,215 @@
                 }
             });
         }
-        
+
         // Save month configuration button
         document.getElementById('save-month-config').addEventListener('click', function() {
-            // ...existing code...
+            // Get all month inputs
+            const monthConfig = {};
+
+            for (let i = 1; i <= 12; i++) {
+                const startInput = document.getElementById(`month_${i}_start`);
+                const endInput = document.getElementById(`month_${i}_end`);
+
+                if (startInput && endInput && startInput.value && endInput.value) {
+                    monthConfig[i] = {
+                        start: startInput.value,
+                        end: endInput.value
+                    };
+                }
+            }
+
+            // Save to localStorage as backup
+            localStorage.setItem('month_dates_config', JSON.stringify(monthConfig));
+
+            // Save to server via AJAX
+            fetch('{{ url_for("save_month_config") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(monthConfig)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('تم حفظ إعدادات الشهور بنجاح');
+
+                    // Update global config for date presets
+                    window.monthDatesConfig = monthConfig;
+                    console.log('Updated month dates config:', window.monthDatesConfig);
+                } else {
+                    alert('حدث خطأ أثناء حفظ إعدادات الشهور: ' + (data.error || 'خطأ غير معروف'));
+                }
+            })
+            .catch(error => {
+                console.error('Error saving month config:', error);
+                alert('حدث خطأ أثناء حفظ إعدادات الشهور');
+            });
         });
-        
+
         // Load saved month configuration
         const savedMonthDates = localStorage.getItem('month_dates_config');
         if (savedMonthDates) {
-            // ...existing code...
+            try {
+                const monthConfig = JSON.parse(savedMonthDates);
+
+                // Apply saved configuration to form
+                for (const [month, dates] of Object.entries(monthConfig)) {
+                    const startInput = document.getElementById(`month_${month}_start`);
+                    const endInput = document.getElementById(`month_${month}_end`);
+
+                    if (startInput && dates.start) {
+                        startInput.value = dates.start;
+                    }
+
+                    if (endInput && dates.end) {
+                        endInput.value = dates.end;
+                    }
+                }
+
+                console.log('Loaded month dates from localStorage');
+            } catch (e) {
+                console.error('Error parsing saved month dates:', e);
+            }
         }
-        
+
         // File upload form handling
         const uploadForm = document.querySelector('form[action="{{ url_for("upload_sync") }}"]');
         if (uploadForm) {
             // ...existing code...
         }
-        
+
         // Save appearance settings button
         document.getElementById('save-appearance-settings').addEventListener('click', function() {
-            // ...existing code...
+            // Get form values
+            const weekendDays = Array.from(document.getElementById('weekend_days').selectedOptions).map(option => option.value);
+            const presentColor = document.getElementById('present_color').value;
+            const absentColor = document.getElementById('absent_color').value;
+            const vacationColor = document.getElementById('vacation_color').value;
+            const transferColor = document.getElementById('transfer_color').value;
+            const sickColor = document.getElementById('sick_color').value;
+            const eidColor = document.getElementById('eid_color').value;
+            const defaultView = document.getElementById('default_view').value;
+
+            // Create settings object
+            const settings = {
+                weekendDays,
+                colors: {
+                    present: presentColor,
+                    absent: absentColor,
+                    vacation: vacationColor,
+                    transfer: transferColor,
+                    sick: sickColor,
+                    eid: eidColor
+                },
+                defaultView
+            };
+
+            // Save to server via AJAX
+            fetch('{{ url_for("save_appearance_settings") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Save to localStorage as backup
+                    localStorage.setItem('appearance_settings', JSON.stringify(settings));
+
+                    // Show success message
+                    alert('تم حفظ إعدادات المظهر بنجاح');
+
+                    // Apply settings immediately
+                    applyAppearanceSettings(settings);
+                } else {
+                    alert('حدث خطأ أثناء حفظ الإعدادات: ' + (data.error || 'خطأ غير معروف'));
+                }
+            })
+            .catch(error => {
+                console.error('Error saving settings:', error);
+                alert('حدث خطأ أثناء حفظ الإعدادات');
+            });
         });
-        
+
         // Load saved appearance settings
-        const savedSettings = localStorage.getItem('appearance_settings');
-        if (savedSettings) {
-            // ...existing code...
+        fetch('{{ url_for("get_appearance_settings") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.settings) {
+                    // Apply settings from server
+                    applyAppearanceSettings(data.settings);
+                } else {
+                    // Try to load from localStorage as fallback
+                    const savedSettings = localStorage.getItem('appearance_settings');
+                    if (savedSettings) {
+                        try {
+                            const settings = JSON.parse(savedSettings);
+                            applyAppearanceSettings(settings);
+                        } catch (e) {
+                            console.error('Error parsing saved settings:', e);
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading settings:', error);
+
+                // Try to load from localStorage as fallback
+                const savedSettings = localStorage.getItem('appearance_settings');
+                if (savedSettings) {
+                    try {
+                        const settings = JSON.parse(savedSettings);
+                        applyAppearanceSettings(settings);
+                    } catch (e) {
+                        console.error('Error parsing saved settings:', e);
+                    }
+                }
+            });
+
+        // Function to apply appearance settings
+        function applyAppearanceSettings(settings) {
+            // Apply weekend days
+            if (settings.weekendDays && settings.weekendDays.length > 0) {
+                const weekendSelect = document.getElementById('weekend_days');
+                if (weekendSelect) {
+                    // Deselect all options first
+                    Array.from(weekendSelect.options).forEach(option => {
+                        option.selected = false;
+                    });
+
+                    // Select the specified weekend days
+                    settings.weekendDays.forEach(day => {
+                        const option = weekendSelect.querySelector(`option[value="${day}"]`);
+                        if (option) {
+                            option.selected = true;
+                        }
+                    });
+                }
+            }
+
+            // Apply colors
+            if (settings.colors) {
+                for (const [status, color] of Object.entries(settings.colors)) {
+                    const colorInput = document.getElementById(`${status}_color`);
+                    if (colorInput) {
+                        colorInput.value = color;
+                    }
+                }
+            }
+
+            // Apply default view
+            if (settings.defaultView) {
+                const defaultViewSelect = document.getElementById('default_view');
+                if (defaultViewSelect) {
+                    defaultViewSelect.value = settings.defaultView;
+                }
+            }
         }
-        
+
         // Error modal handling
         document.querySelectorAll('.error-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -917,7 +1183,7 @@
                 document.getElementById('errorDetails').textContent = errorMessage;
             });
         });
-        
+
         // File upload validation
         const syncFileInput = document.getElementById('sync_file');
         if (syncFileInput) {
@@ -925,7 +1191,7 @@
                 // ...existing code...
             });
         }
-        
+
         // Check for ongoing sync on page load
         checkSyncStatus();
 
@@ -936,37 +1202,37 @@
                 const housingName = this.getAttribute('data-housing-name');
                 const housingLocation = this.getAttribute('data-housing-location') || '';
                 const housingDescription = this.getAttribute('data-housing-description') || '';
-                
+
                 document.getElementById('edit_housing_id').value = housingId;
                 document.getElementById('edit_housing_name').value = housingName;
                 document.getElementById('edit_housing_location').value = housingLocation;
                 document.getElementById('edit_housing_description').value = housingDescription;
-                
+
                 // افتح المودال لتعديل السكن
                 const modal = new bootstrap.Modal(document.getElementById('editHousingModal'));
                 modal.show();
             });
         });
-        
+
         document.querySelectorAll('.delete-housing-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 if (confirm(`هل أنت متأكد من حذف سكن "${this.getAttribute('data-housing-name')}"؟`)) {
                     const form = document.createElement('form');
                     form.method = 'POST';
                     form.action = "{{ url_for('delete_housing') }}";
-                    
+
                     const input = document.createElement('input');
                     input.type = 'hidden';
                     input.name = 'housing_id';
                     input.value = this.getAttribute('data-housing-id');
-                    
+
                     form.appendChild(input);
                     document.body.appendChild(form);
                     form.submit();
                 }
             });
         });
-        
+
         // Terminal management
         document.querySelectorAll('.edit-terminal-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -975,50 +1241,50 @@
                 const deviceId = this.getAttribute('data-device-id');
                 const location = this.getAttribute('data-location') || '';
                 const housingId = this.getAttribute('data-housing-id') || '';
-                
+
                 document.getElementById('edit_terminal_id').value = terminalId;
                 document.getElementById('edit_terminal_alias').value = terminalAlias;
                 document.getElementById('edit_device_id').value = deviceId;
                 document.getElementById('edit_terminal_location').value = location;
                 document.getElementById('edit_housing_id').value = housingId;
-                
+
                 // افتح المودال لتعديل جهاز البصمة
                 const modal = new bootstrap.Modal(document.getElementById('editTerminalModal'));
                 modal.show();
             });
         });
-        
+
         document.querySelectorAll('.delete-terminal-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 if (confirm(`هل أنت متأكد من حذف جهاز البصمة "${this.getAttribute('data-terminal-alias')}"؟`)) {
                     const form = document.createElement('form');
                     form.method = 'POST';
                     form.action = "{{ url_for('delete_terminal') }}";
-                    
+
                     const input = document.createElement('input');
                     input.type = 'hidden';
                     input.name = 'terminal_id';
                     input.value = this.getAttribute('data-terminal-id');
-                    
+
                     form.appendChild(input);
                     document.body.appendChild(form);
                     form.submit();
                 }
             });
         });
-        
+
         // View terminals for a specific housing - هذا هو الكود المهم الذي يعرض أجهزة البصمة
         document.querySelectorAll('.view-terminals-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 const housingId = this.getAttribute('data-housing-id');
                 const housingName = this.getAttribute('data-housing-name');
-                
+
                 // تعيين اسم السكن في عنوان المودال
                 document.getElementById('housing-name-title').textContent = housingName;
-                
+
                 // تفريغ جدول أجهزة البصمة
                 document.getElementById('housing-terminals-body').innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border text-light" role="status"><span class="visually-hidden">جاري التحميل...</span></div></td></tr>';
-                
+
                 // إعداد زر إضافة جهاز البصمة
                 document.getElementById('add-terminal-to-housing-btn').onclick = function() {
                     const addTerminalModal = new bootstrap.Modal(document.getElementById('addTerminalModal'));
@@ -1026,11 +1292,11 @@
                     document.getElementById('housing_id').value = housingId;
                     addTerminalModal.show();
                 };
-                
+
                 // عرض المودال
                 const viewTerminalsModal = new bootstrap.Modal(document.getElementById('viewTerminalsModal'));
                 viewTerminalsModal.show();
-                
+
                 // جلب أجهزة البصمة من الخادم
                 fetch(`{{ url_for('get_housing_terminals') }}?housing_id=${housingId}`)
                     .then(response => response.json())
@@ -1038,7 +1304,7 @@
                         if (data.success) {
                             const terminalsTable = document.getElementById('housing-terminals-body');
                             const noTerminalsMessage = document.getElementById('no-terminals-message');
-                            
+
                             // إذا لم تكن هناك أجهزة بصمة
                             if (!data.terminals || data.terminals.length === 0) {
                                 terminalsTable.innerHTML = '';
@@ -1047,7 +1313,7 @@
                                 // إذا كانت هناك أجهزة بصمة
                                 noTerminalsMessage.classList.add('d-none');
                                 terminalsTable.innerHTML = '';
-                                
+
                                 data.terminals.forEach(terminal => {
                                     const row = document.createElement('tr');
                                     row.innerHTML = `
@@ -1074,7 +1340,7 @@
                                     `;
                                     terminalsTable.appendChild(row);
                                 });
-                                
+
                                 // إضافة معالجي الأحداث للأزرار داخل المودال
                                 terminalsTable.querySelectorAll('.edit-terminal-modal-btn').forEach(modalBtn => {
                                     modalBtn.addEventListener('click', function() {
@@ -1083,21 +1349,21 @@
                                         const deviceId = this.getAttribute('data-device-id');
                                         const location = this.getAttribute('data-location');
                                         const tHousingId = this.getAttribute('data-housing-id');
-                                        
+
                                         // تعبئة نموذج تعديل جهاز البصمة
                                         document.getElementById('edit_terminal_id').value = terminalId;
                                         document.getElementById('edit_terminal_alias').value = terminalAlias;
                                         document.getElementById('edit_device_id').value = deviceId;
                                         document.getElementById('edit_terminal_location').value = location;
                                         document.getElementById('edit_housing_id').value = tHousingId || housingId;
-                                        
+
                                         // إغلاق مودال عرض الأجهزة وفتح مودال التعديل
                                         viewTerminalsModal.hide();
                                         const editTerminalModal = new bootstrap.Modal(document.getElementById('editTerminalModal'));
                                         editTerminalModal.show();
                                     });
                                 });
-                                
+
                                 // إضافة معالج الحدث لزر إلغاء الربط
                                 terminalsTable.querySelectorAll('.remove-terminal-btn').forEach(removeBtn => {
                                     removeBtn.addEventListener('click', function() {
@@ -1105,12 +1371,12 @@
                                             const form = document.createElement('form');
                                             form.method = 'POST';
                                             form.action = "{{ url_for('remove_terminal_housing') }}";
-                                            
+
                                             const input = document.createElement('input');
                                             input.type = 'hidden';
                                             input.name = 'terminal_id';
                                             input.value = this.getAttribute('data-terminal-id');
-                                            
+
                                             form.appendChild(input);
                                             document.body.appendChild(form);
                                             form.submit();
@@ -1129,7 +1395,7 @@
                     });
             });
         });
-        
+
         // إضافة معالج الحدث لزر "عرض سجل المزامنة الكامل"
         const viewHistoryBtn = document.getElementById('view-full-history');
         if (viewHistoryBtn) {
@@ -1138,27 +1404,27 @@
             });
         }
     });
-    
+
     // Helper functions for sync status
     function updateSyncStatus(status, message) {
         const container = document.getElementById('sync-status-container');
         if (!container) return;
-        
+
         const statusHTML = `
             <div class="d-flex align-items-center">
                 ${getStatusBadgeHTML(status)}
                 <span>${message || getStatusMessage(status)}</span>
             </div>
         `;
-        
+
         // الاحتفاظ بعناصر المعالجة وشريط التقدم إذا كانت موجودة
         const progressBar = container.querySelector('.progress');
         const syncSteps = container.querySelector('#sync-steps');
         const cancelForm = container.querySelector('form[action="{{ url_for("cancel_sync") }}"]');
-        
+
         // تحديث حالة المزامنة
         container.innerHTML = statusHTML;
-        
+
         // إعادة إضافة العناصر المحذوفة إذا كانت المزامنة جارية
         if (status === 'in_progress') {
             if (progressBar) container.appendChild(progressBar);
@@ -1166,7 +1432,7 @@
             if (syncSteps) container.appendChild(syncSteps);
         }
     }
-    
+
     function getStatusBadgeHTML(status) {
         switch (status) {
             case 'success':
@@ -1181,7 +1447,7 @@
                 return '<span class="badge bg-secondary me-2"><i class="fas fa-question"></i></span>';
         }
     }
-    
+
     function getStatusMessage(status) {
         switch (status) {
             case 'success':
@@ -1196,7 +1462,7 @@
                 return 'لا توجد بيانات للمزامنة';
         }
     }
-    
+
     function updateProgressBar(percent, message) {
         const progressBar = document.getElementById('sync-progress-bar');
         if (progressBar) {
@@ -1205,16 +1471,16 @@
             progressBar.textContent = message || `${percent}%`;
         }
     }
-    
+
     function setStepStatus(step, status) {
         const stepElement = document.getElementById(`step-${step}`);
         const iconElement = document.getElementById(`${step}-icon`);
-        
+
         if (!stepElement || !iconElement) return;
-        
+
         // إعادة تعيين جميع الفئات
         iconElement.className = 'badge me-2';
-        
+
         switch (status) {
             case 'waiting':
                 iconElement.classList.add('bg-secondary');
@@ -1234,19 +1500,19 @@
                 break;
         }
     }
-    
+
     function simulateSyncProgress() {
         // محاكاة تقدم المزامنة بمؤثرات بصرية
         setTimeout(() => {
             setStepStatus('connect', 'success');
             setStepStatus('download', 'pending');
             updateProgressBar(25, 'تحميل البيانات...');
-            
+
             setTimeout(() => {
                 setStepStatus('download', 'success');
                 setStepStatus('process', 'pending');
                 updateProgressBar(50, 'معالجة البيانات...');
-                
+
                 setTimeout(() => {
                     setStepStatus('process', 'success');
                     setStepStatus('save', 'pending');
@@ -1255,33 +1521,33 @@
             }, 3000);
         }, 2000);
     }
-    
+
     function completeSyncAnimation(data) {
         setStepStatus('save', 'success');
         setStepStatus('complete', 'success');
         updateProgressBar(100, 'اكتملت المزامنة بنجاح');
-        
+
         let message = 'المزامنة اكتملت بنجاح';
         if (data && data.records) {
             message += ` (${data.records} سجل تمت مزامنته)`;
         }
-        
+
         updateSyncStatus('success', message);
-        
+
         // لا تقم بإعادة تحميل الصفحة تلقائيًا - دع المستخدم يرى النتائج
         console.log('Sync completed successfully');
     }
-    
+
     function failSyncAnimation(errorMessage) {
         setStepStatus('save', 'error');
         setStepStatus('complete', 'error');
         updateProgressBar(100, 'فشلت المزامنة');
         updateSyncStatus('error', errorMessage || 'فشلت عملية المزامنة');
-        
+
         // إضافة رسالة الخطأ إذا لم تكن موجودة بالفعل
         const container = document.getElementById('sync-status-container');
         const existingAlert = container.querySelector('.alert.alert-danger');
-        
+
         if (container && errorMessage && !existingAlert) {
             container.innerHTML += `
                 <div class="alert alert-danger mt-2">
@@ -1290,10 +1556,10 @@
                 </div>
             `;
         }
-        
+
         console.log('Sync failed:', errorMessage);
     }
-    
+
     function checkSyncStatus() {
         // الاستعلام عن حالة المزامنة الحالية من الخادم
         fetch("{{ url_for('check_sync_status') }}")
@@ -1305,7 +1571,7 @@
                     if (syncStepsEl) {
                         syncStepsEl.classList.remove('d-none');
                     }
-                    
+
                     updateSyncStatus('in_progress', data.message || 'جاري المزامنة...');
                     simulateSyncProgress();
                     setTimeout(checkSyncResult, 5000);
@@ -1315,7 +1581,7 @@
                 console.error('Error checking sync status:', error);
             });
     }
-    
+
     function checkSyncResult() {
         // التحقق من نتيجة المزامنة بعد فترة من الزمن
         fetch("{{ url_for('check_sync_status') }}")
@@ -1328,10 +1594,10 @@
                         return JSON.parse(text);
                     } catch (e) {
                         console.error('Invalid JSON response:', text);
-                        return { 
-                            status: 'error', 
+                        return {
+                            status: 'error',
                             message: 'استجابة غير صالحة من الخادم',
-                            error: 'تعذر معالجة استجابة الخادم' 
+                            error: 'تعذر معالجة استجابة الخادم'
                         };
                     }
                 });
@@ -1371,13 +1637,13 @@
                 }
             });
     }
-    
+
     function applyColorSettings(settings) {
         // تطبيق إعدادات الألوان على واجهة المستخدم
         if (!settings) return;
-        
+
         const colorInputs = ['present_color', 'absent_color', 'vacation_color', 'transfer_color', 'sick_color', 'eid_color'];
-        
+
         colorInputs.forEach(colorId => {
             const input = document.getElementById(colorId);
             if (input && settings[colorId]) {
@@ -1393,7 +1659,7 @@
             alert('يرجى كتابة "CONFIRM_DELETE" بالضبط للتأكيد');
             return false;
         }
-        
+
         return confirm('هل أنت متأكد من حذف جميع سجلات الدوام وسجلات المزامنة؟ هذا الإجراء لا يمكن التراجع عنه!');
     }
 </script>

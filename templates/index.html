@@ -13,6 +13,8 @@
 </div>
 {% endblock %}
 
+{% block content_attributes %}id="dashboard-page"{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <!-- Summary Cards -->
@@ -31,7 +33,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3 mb-4">
         <div class="card bg-dark text-white h-100">
             <div class="card-body">
@@ -47,7 +49,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3 mb-4">
         <div class="card bg-dark text-white h-100">
             <div class="card-body">
@@ -63,7 +65,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3 mb-4">
         <div class="card bg-dark text-white h-100">
             <div class="card-body">
@@ -93,7 +95,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Department Summary -->
     <div class="col-md-4 mb-4">
         <div class="card bg-dark h-100">
@@ -178,7 +180,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted mb-4">{{ t('ai_analytics_moved_message') or 'The AI Analytics features have been moved to a dedicated page for better organization and improved performance.' }}</p>
-                
+
                 <div class="text-center">
                     <a href="{{ url_for('ai_analytics') }}" class="btn btn-success">
                         <i class="fas fa-brain me-2"></i> {{ t('open_ai_analytics') or 'Open AI Analytics Dashboard' }}
@@ -192,145 +194,19 @@
 
 {% block scripts %}
 <script>
-    // Sample data for charts - would be replaced with actual data from backend
+    // The dashboard data is loaded by the loadDashboardData() function in main.js
+    // This is called automatically when the page loads
     document.addEventListener('DOMContentLoaded', function() {
-        // Attendance trend chart
-        const ctx = document.getElementById('attendance-chart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [
-                    {
-                        label: 'Present',
-                        data: [42, 45, 41, 43, 40, 25, 20],
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    },
-                    {
-                        label: 'Absent',
-                        data: [5, 3, 6, 4, 7, 2, 2],
-                        borderColor: '#dc3545',
-                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    },
-                    {
-                        label: 'Vacation',
-                        data: [2, 1, 2, 2, 2, 0, 0],
-                        borderColor: '#ffc107',
-                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Update dashboard summary cards
-        document.getElementById('total-employees').textContent = '49';
-        document.getElementById('present-today').textContent = '40';
-        document.getElementById('absent-today').textContent = '7';
-        document.getElementById('on-vacation').textContent = '2';
-        
-        // Update department summary
-        const deptSummary = document.getElementById('dept-summary');
-        deptSummary.innerHTML = `
-            <tr>
-                <td>Jeddah Housing Camp</td>
-                <td>15</td>
-                <td><span class="badge bg-success">12</span></td>
-            </tr>
-            <tr>
-                <td>Bahira Housing Camp</td>
-                <td>12</td>
-                <td><span class="badge bg-success">10</span></td>
-            </tr>
-            <tr>
-                <td>King Abdulaziz Hospital</td>
-                <td>10</td>
-                <td><span class="badge bg-success">9</span></td>
-            </tr>
-            <tr>
-                <td>Old Gypsum Factory</td>
-                <td>12</td>
-                <td><span class="badge bg-success">9</span></td>
-            </tr>
-        `;
-        
-        // Update recent activity
-        const recentActivity = document.getElementById('recent-activity');
-        recentActivity.innerHTML = `
-            <tr>
-                <td>SALMAN KHAN</td>
-                <td>08:15 AM</td>
-                <td>Clock In</td>
-                <td>Main Gate</td>
-                <td><span class="badge bg-success">On Time</span></td>
-            </tr>
-            <tr>
-                <td>MOHAMMED MUBARAK</td>
-                <td>08:22 AM</td>
-                <td>Clock In</td>
-                <td>Main Gate</td>
-                <td><span class="badge bg-warning">Late</span></td>
-            </tr>
-            <tr>
-                <td>ASLAM ALI</td>
-                <td>08:05 AM</td>
-                <td>Clock In</td>
-                <td>Site Office</td>
-                <td><span class="badge bg-success">On Time</span></td>
-            </tr>
-            <tr>
-                <td>MOHAMMAD YUNUS</td>
-                <td>05:02 PM</td>
-                <td>Clock Out</td>
-                <td>Main Gate</td>
-                <td><span class="badge bg-success">Complete</span></td>
-            </tr>
-            <tr>
-                <td>Mohammed Ayub</td>
-                <td>05:15 PM</td>
-                <td>Clock Out</td>
-                <td>Site Office</td>
-                <td><span class="badge bg-success">Complete</span></td>
-            </tr>
-        `;
-        
-        // Refresh dashboard button
-        document.getElementById('refresh-dashboard').addEventListener('click', function() {
-            // Here you would typically fetch fresh data from the server
-            this.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Refreshing...';
-            
-            // Simulate delay for demonstration
-            setTimeout(() => {
-                this.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
-            }, 1500);
-        });
+        console.log('Dashboard page loaded, manually triggering data load');
+        if (typeof window.loadDashboardData === 'function') {
+            window.loadDashboardData().then(data => {
+                console.log('Dashboard data loaded successfully:', data);
+            }).catch(error => {
+                console.error('Error loading dashboard data:', error);
+            });
+        } else {
+            console.error('loadDashboardData function not found');
+        }
     });
 </script>
 {% endblock %}

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="{{ get_locale() }}" dir="{{ get_dir() }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('executive_report') }} - {{ period_text }}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Custom Print CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print_report.css') }}">
+    
+    <style>
+        @media screen {
+            .print-only {
+                display: none;
+            }
+            .print-button {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 999;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Print Button (only visible on screen) -->
+    <button class="btn btn-primary print-button" onclick="window.print()">
+        <i class="fas fa-print"></i> {{ t('print_report') }}
+    </button>
+
+    <div class="print-container">
+        <!-- Report Header -->
+        <div class="report-header">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="report-logo">
+            <h1 class="report-title">{{ t('housing_maintenance_report') }}</h1>
+            <h2 class="report-subtitle">{{ period_text }}</h2>
+            <p class="report-date">{{ t('generated_on') }}: {{ export_date }}</p>
+        </div>
+
+        <!-- Report Information -->
+        <div class="report-info">
+            <div class="report-info-item">
+                <div class="report-info-label">{{ t('department') }}:</div>
+                <div class="report-info-value">{{ department_name }}</div>
+            </div>
+            <div class="report-info-item">
+                <div class="report-info-label">{{ t('housing') }}:</div>
+                <div class="report-info-value">{{ housing_name }}</div>
+            </div>
+            <div class="report-info-item">
+                <div class="report-info-label">{{ t('total_employees') }}:</div>
+                <div class="report-info-value">{{ timesheet_data.total_employees }}</div>
+            </div>
+            {% if timesheet_data.working_days %}
+            <div class="report-info-item">
+                <div class="report-info-label">{{ t('working_days') }}:</div>
+                <div class="report-info-value">{{ timesheet_data.working_days }} ({{ timesheet_data.working_hours }} {{ t('hours') }})</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Summary Section -->
+        <div class="report-summary">
+            <h3 class="summary-title">{{ t('attendance_summary') }}</h3>
+            <div class="summary-items">
+                {% set present_count = 0 %}
+                {% set absent_count = 0 %}
+                {% set vacation_count = 0 %}
+                {% set exception_count = 0 %}
+                
+                {% for employee in timesheet_data.employees %}
+                    {% for day in employee.attendance %}
+                        {% if day.status == 'P' %}
+                            {% set present_count = present_count + 1 %}
+                        {% elif day.status == 'A' %}
+                            {% set absent_count = absent_count + 1 %}
+                        {% elif day.status == 'V' %}
+                            {% set vacation_count = vacation_count + 1 %}
+                        {% elif day.status == 'E' %}
+                            {% set exception_count = exception_count + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                
+                <div class="summary-item">
+                    <div class="summary-value">{{ present_count }}</div>
+                    <div class="summary-label">{{ t('present_days') }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">{{ absent_count }}</div>
+                    <div class="summary-label">{{ t('absent_days') }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">{{ vacation_count }}</div>
+                    <div class="summary-label">{{ t('vacation_days') }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">{{ exception_count }}</div>
+                    <div class="summary-label">{{ t('exception_days') }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timesheet Table -->
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>{{ t('employee_code') }}</th>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('profession') }}</th>
+                    <th>{{ t('housing') }}</th>
+                    <th>{{ t('present_days') }}</th>
+                    <th>{{ t('absent_days') }}</th>
+                    <th>{{ t('vacation_days') }}</th>
+                    <th>{{ t('total_hours') }}</th>
+                    <th>{{ t('overtime_hours') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in timesheet_data.employees %}
+                    {% set present_days = 0 %}
+                    {% set absent_days = 0 %}
+                    {% set vacation_days = 0 %}
+                    
+                    {% for day in employee.attendance %}
+                        {% if day.status == 'P' %}
+                            {% set present_days = present_days + 1 %}
+                        {% elif day.status == 'A' and not day.is_weekend %}
+                            {% set absent_days = absent_days + 1 %}
+                        {% elif day.status == 'V' %}
+                            {% set vacation_days = vacation_days + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <tr>
+                        <td>{{ employee.emp_code }}</td>
+                        <td>{{ employee.name }}</td>
+                        <td>{{ employee.profession }}</td>
+                        <td>{{ employee.housing }}</td>
+                        <td>{{ present_days }}</td>
+                        <td>{{ absent_days }}</td>
+                        <td>{{ vacation_days }}</td>
+                        <td>{{ employee.total_work_hours|round(1) }}</td>
+                        <td>{{ employee.total_overtime_hours|round(1) }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Signature Section -->
+        <div class="report-signature">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-name">{{ t('prepared_by') }}</div>
+                <div class="signature-title">{{ t('hr_manager') }}</div>
+            </div>
+            
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-name">{{ t('approved_by') }}</div>
+                <div class="signature-title">{{ t('general_manager') }}</div>
+            </div>
+        </div>
+
+        <!-- Report Footer -->
+        <div class="report-footer">
+            <p>{{ t('confidential_document') }} - {{ t('housing_maintenance_system') }}</p>
+            <p>{{ t('generated_on') }}: {{ export_date }}</p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Auto-print when page loads (optional)
+        window.onload = function() {
+            // Uncomment to automatically open print dialog
+            // window.print();
+        };
+    </script>
+</body>
+</html>

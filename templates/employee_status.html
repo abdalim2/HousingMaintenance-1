@@ -10,6 +10,12 @@
     <button class="btn btn-sm btn-outline-primary" id="btn-add-transfer" data-bs-toggle="modal" data-bs-target="#transferModal">
         <i class="fas fa-exchange-alt me-1"></i> {{ t('add_transfer') or 'Add Transfer' }}
     </button>
+    <button class="btn btn-sm btn-outline-primary" id="btn-add-exception" data-bs-toggle="modal" data-bs-target="#exceptionModal">
+        <i class="fas fa-calendar-check me-1"></i> {{ t('add_exception') or 'Add Exception' }}
+    </button>
+    <button class="btn btn-sm btn-outline-primary" id="btn-add-sick-leave" data-bs-toggle="modal" data-bs-target="#sickLeaveModal">
+        <i class="fas fa-procedures me-1"></i> {{ t('add_sick_leave') or 'Add Sick Leave' }}
+    </button>
 </div>
 {% endblock %}
 
@@ -58,7 +64,7 @@
         <div class="card bg-dark">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-plane-departure me-2"></i>{{ t('employee_vacations') or 'Employee Vacations' }} 
+                    <i class="fas fa-plane-departure me-2"></i>{{ t('employee_vacations') or 'Employee Vacations' }}
                     <span class="badge bg-info">{{ vacation_count }}</span>
                 </h5>
                 <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#vacationModal">
@@ -102,13 +108,13 @@
                     </table>
                 </div>
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i> 
+                    <i class="fas fa-info-circle me-2"></i>
                     {{ t('vacation_info') or 'Vacation periods will be marked with "V" in the timesheet.' }}
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Transfer Management Section -->
     <div class="col-md-6 mb-4">
         <div class="card bg-dark">
@@ -167,8 +173,132 @@
                     </table>
                 </div>
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i> 
+                    <i class="fas fa-info-circle me-2"></i>
                     {{ t('transfer_info') or 'Transfer periods will be marked with "T" in the timesheet.' }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Exception Management Section -->
+    <div class="col-md-6 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-calendar-check me-2"></i>{{ t('employee_exceptions') or 'Employee Exceptions' }}
+                    <span class="badge bg-info">{{ exception_count|default(0) }}</span>
+                </h5>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#exceptionModal">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>{{ t('employee') or 'Employee' }}</th>
+                                <th>{{ t('date') or 'Date' }}</th>
+                                <th>{{ t('reason') or 'Reason' }}</th>
+                                <th>{{ t('hours_credited') or 'Hours Credited' }}</th>
+                                <th>{{ t('actions') or 'Actions' }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exception-table-body">
+                            {% for exception in exceptions|default([]) %}
+                            <tr>
+                                <td>{{ exception.employee.name }}</td>
+                                <td>{{ exception.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ exception.reason }}</td>
+                                <td>{{ exception.hours_credited }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-warning btn-edit-exception" data-id="{{ exception.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-delete-exception" data-id="{{ exception.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">{{ t('no_exceptions') or 'No exceptions found' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    {{ t('exception_info') or 'Exceptions will credit 8 hours of work for the specified day.' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sick Leave Management Section -->
+    <div class="col-md-6 mb-4">
+        <div class="card bg-dark">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-procedures me-2"></i>{{ t('employee_sick_leaves') or 'Employee Sick Leaves' }}
+                    <span class="badge bg-info">{{ sick_leave_count|default(0) }}</span>
+                </h5>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#sickLeaveModal">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>{{ t('employee') or 'Employee' }}</th>
+                                <th>{{ t('start_date') or 'Start Date' }}</th>
+                                <th>{{ t('end_date') or 'End Date' }}</th>
+                                <th>{{ t('medical_certificate') or 'Medical Certificate' }}</th>
+                                <th>{{ t('actions') or 'Actions' }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sick-leave-table-body">
+                            {% for sick_leave in sick_leaves|default([]) %}
+                            <tr>
+                                <td>{{ sick_leave.employee.name }}</td>
+                                <td>{{ sick_leave.start_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ sick_leave.end_date.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    {% if sick_leave.medical_certificate %}
+                                    <span class="badge bg-success">{{ t('yes') or 'Yes' }}</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">{{ t('no') or 'No' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-warning btn-edit-sick-leave" data-id="{{ sick_leave.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-delete-sick-leave" data-id="{{ sick_leave.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">{{ t('no_sick_leaves') or 'No sick leaves found' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    {{ t('sick_leave_info') or 'Sick leave periods will be marked with "S" in the timesheet.' }}
                 </div>
             </div>
         </div>
@@ -186,7 +316,7 @@
             <div class="modal-body">
                 <form id="vacation-form" action="{{ url_for('save_vacation') }}" method="post">
                     <input type="hidden" id="vacation-id" name="id" value="">
-                    
+
                     <div class="mb-3">
                         <label for="vacation-employee" class="form-label">{{ t('employee') or 'Employee' }}</label>
                         <select class="form-select" id="vacation-employee" name="employee_id" required>
@@ -196,7 +326,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="vacation-start" class="form-label">{{ t('start_date') or 'Start Date' }}</label>
@@ -207,7 +337,7 @@
                             <input type="date" class="form-control" id="vacation-end" name="end_date" required>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="vacation-notes" class="form-label">{{ t('notes') or 'Notes' }}</label>
                         <textarea class="form-control" id="vacation-notes" name="notes" rows="3"></textarea>
@@ -233,7 +363,7 @@
             <div class="modal-body">
                 <form id="transfer-form" action="{{ url_for('save_transfer') }}" method="post">
                     <input type="hidden" id="transfer-id" name="id" value="">
-                    
+
                     <div class="mb-3">
                         <label for="transfer-employee" class="form-label">{{ t('employee') or 'Employee' }}</label>
                         <select class="form-select" id="transfer-employee" name="employee_id" required>
@@ -243,7 +373,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="transfer-start" class="form-label">{{ t('start_date') or 'Start Date' }}</label>
@@ -254,7 +384,7 @@
                             <input type="date" class="form-control" id="transfer-end" name="end_date" required>
                         </div>
                     </div>
-                    
+
                     <!-- Transfer Type -->
                     <div class="mb-3">
                         <label class="form-label">{{ t('transfer_type') or 'Transfer Type' }}</label>
@@ -273,7 +403,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Department Transfer -->
                     <div id="department-transfer" class="transfer-options">
                         <div class="row mb-3">
@@ -297,7 +427,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Housing Transfer -->
                     <div id="housing-transfer" class="transfer-options d-none">
                         <div class="row mb-3">
@@ -321,7 +451,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="transfer-notes" class="form-label">{{ t('notes') or 'Notes' }}</label>
                         <textarea class="form-control" id="transfer-notes" name="notes" rows="3"></textarea>
@@ -331,6 +461,113 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') or 'Cancel' }}</button>
                 <button type="button" class="btn btn-primary" id="btn-save-transfer">{{ t('save') or 'Save' }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Exception Modal -->
+<div class="modal fade" id="exceptionModal" tabindex="-1" aria-labelledby="exceptionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exceptionModalLabel">{{ t('add_exception') or 'Add Exception' }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="exception-form" action="{{ url_for('save_exception') }}" method="post">
+                    <input type="hidden" id="exception-id" name="id" value="">
+
+                    <div class="mb-3">
+                        <label for="exception-employee" class="form-label">{{ t('employee') or 'Employee' }}</label>
+                        <select class="form-select" id="exception-employee" name="employee_id" required>
+                            <option value="" selected disabled>{{ t('select_employee') or 'Select Employee' }}</option>
+                            {% for employee in employees %}
+                                <option value="{{ employee.id }}">{{ employee.name }} ({{ employee.emp_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="exception-date" class="form-label">{{ t('date') or 'Date' }}</label>
+                        <input type="date" class="form-control" id="exception-date" name="date" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="exception-reason" class="form-label">{{ t('reason') or 'Reason' }}</label>
+                        <input type="text" class="form-control" id="exception-reason" name="reason" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="exception-hours" class="form-label">{{ t('hours_credited') or 'Hours Credited' }}</label>
+                        <input type="number" class="form-control" id="exception-hours" name="hours_credited" value="8" min="0" max="24" step="0.5" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="exception-notes" class="form-label">{{ t('notes') or 'Notes' }}</label>
+                        <textarea class="form-control" id="exception-notes" name="notes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') or 'Cancel' }}</button>
+                <button type="button" class="btn btn-primary" id="btn-save-exception">{{ t('save') or 'Save' }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sick Leave Modal -->
+<div class="modal fade" id="sickLeaveModal" tabindex="-1" aria-labelledby="sickLeaveModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sickLeaveModalLabel">{{ t('add_sick_leave') or 'Add Sick Leave' }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="sick-leave-form" action="{{ url_for('save_sick_leave') }}" method="post">
+                    <input type="hidden" id="sick-leave-id" name="id" value="">
+
+                    <div class="mb-3">
+                        <label for="sick-leave-employee" class="form-label">{{ t('employee') or 'Employee' }}</label>
+                        <select class="form-select" id="sick-leave-employee" name="employee_id" required>
+                            <option value="" selected disabled>{{ t('select_employee') or 'Select Employee' }}</option>
+                            {% for employee in employees %}
+                                <option value="{{ employee.id }}">{{ employee.name }} ({{ employee.emp_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="sick-leave-start" class="form-label">{{ t('start_date') or 'Start Date' }}</label>
+                            <input type="date" class="form-control" id="sick-leave-start" name="start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="sick-leave-end" class="form-label">{{ t('end_date') or 'End Date' }}</label>
+                            <input type="date" class="form-control" id="sick-leave-end" name="end_date" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="sick-leave-certificate" name="medical_certificate">
+                        <label class="form-check-label" for="sick-leave-certificate">{{ t('has_medical_certificate') or 'Has Medical Certificate' }}</label>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="sick-leave-reason" class="form-label">{{ t('reason') or 'Reason' }}</label>
+                        <input type="text" class="form-control" id="sick-leave-reason" name="reason">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="sick-leave-notes" class="form-label">{{ t('notes') or 'Notes' }}</label>
+                        <textarea class="form-control" id="sick-leave-notes" name="notes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') or 'Cancel' }}</button>
+                <button type="button" class="btn btn-primary" id="btn-save-sick-leave">{{ t('save') or 'Save' }}</button>
             </div>
         </div>
     </div>
@@ -346,14 +583,17 @@
         document.getElementById('vacation-end').value = today;
         document.getElementById('transfer-start').value = today;
         document.getElementById('transfer-end').value = today;
-        
+        document.getElementById('exception-date').value = today;
+        document.getElementById('sick-leave-start').value = today;
+        document.getElementById('sick-leave-end').value = today;
+
         // Toggle between department and housing transfer options
         const transferTypeRadios = document.querySelectorAll('input[name="transfer_type"]');
         transferTypeRadios.forEach(radio => {
             radio.addEventListener('change', function() {
                 const departmentTransfer = document.getElementById('department-transfer');
                 const housingTransfer = document.getElementById('housing-transfer');
-                
+
                 if (this.value === 'department') {
                     departmentTransfer.classList.remove('d-none');
                     housingTransfer.classList.add('d-none');
@@ -369,7 +609,7 @@
                 }
             });
         });
-        
+
         // Submit vacation form
         document.getElementById('btn-save-vacation').addEventListener('click', function() {
             const form = document.getElementById('vacation-form');
@@ -379,7 +619,7 @@
                 form.reportValidity();
             }
         });
-        
+
         // Submit transfer form
         document.getElementById('btn-save-transfer').addEventListener('click', function() {
             const form = document.getElementById('transfer-form');
@@ -387,7 +627,7 @@
                 // Validate form based on transfer type
                 const transferType = document.querySelector('input[name="transfer_type"]:checked').value;
                 let valid = true;
-                
+
                 if (transferType === 'department') {
                     const fromDept = document.getElementById('from-department').value;
                     const toDept = document.getElementById('to-department').value;
@@ -403,7 +643,7 @@
                         valid = false;
                     }
                 }
-                
+
                 if (valid) {
                     form.submit();
                 }
@@ -411,7 +651,7 @@
                 form.reportValidity();
             }
         });
-        
+
         // Edit vacation
         document.querySelectorAll('.btn-edit-vacation').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -424,17 +664,17 @@
                         document.getElementById('vacation-start').value = data.start_date;
                         document.getElementById('vacation-end').value = data.end_date;
                         document.getElementById('vacation-notes').value = data.notes;
-                        
+
                         // Update modal title
                         document.getElementById('vacationModalLabel').textContent = "{{ t('edit_vacation') or 'Edit Vacation' }}";
-                        
+
                         // Show modal
                         const modal = new bootstrap.Modal(document.getElementById('vacationModal'));
                         modal.show();
                     });
             });
         });
-        
+
         // Edit transfer
         document.querySelectorAll('.btn-edit-transfer').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -447,13 +687,13 @@
                         document.getElementById('transfer-start').value = data.start_date;
                         document.getElementById('transfer-end').value = data.end_date;
                         document.getElementById('transfer-notes').value = data.notes;
-                        
+
                         // Set transfer type based on the data
                         if (data.from_department_id || data.to_department_id) {
                             document.getElementById('type-department').checked = true;
                             document.getElementById('department-transfer').classList.remove('d-none');
                             document.getElementById('housing-transfer').classList.add('d-none');
-                            
+
                             if (data.from_department_id) {
                                 document.getElementById('from-department').value = data.from_department_id;
                             }
@@ -464,7 +704,7 @@
                             document.getElementById('type-housing').checked = true;
                             document.getElementById('department-transfer').classList.add('d-none');
                             document.getElementById('housing-transfer').classList.remove('d-none');
-                            
+
                             if (data.from_housing_id) {
                                 document.getElementById('from-housing').value = data.from_housing_id;
                             }
@@ -472,17 +712,17 @@
                                 document.getElementById('to-housing').value = data.to_housing_id;
                             }
                         }
-                        
+
                         // Update modal title
                         document.getElementById('transferModalLabel').textContent = "{{ t('edit_transfer') or 'Edit Transfer' }}";
-                        
+
                         // Show modal
                         const modal = new bootstrap.Modal(document.getElementById('transferModal'));
                         modal.show();
                     });
             });
         });
-        
+
         // Delete vacation
         document.querySelectorAll('.btn-delete-vacation').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -492,13 +732,102 @@
                 }
             });
         });
-        
+
         // Delete transfer
         document.querySelectorAll('.btn-delete-transfer').forEach(btn => {
             btn.addEventListener('click', function() {
                 const id = this.getAttribute('data-id');
                 if (confirm("{{ t('confirm_delete_transfer') or 'Are you sure you want to delete this transfer?' }}")) {
                     window.location.href = `/delete_transfer/${id}`;
+                }
+            });
+        });
+
+        // Submit exception form
+        document.getElementById('btn-save-exception').addEventListener('click', function() {
+            const form = document.getElementById('exception-form');
+            if (form.checkValidity()) {
+                form.submit();
+            } else {
+                form.reportValidity();
+            }
+        });
+
+        // Submit sick leave form
+        document.getElementById('btn-save-sick-leave').addEventListener('click', function() {
+            const form = document.getElementById('sick-leave-form');
+            if (form.checkValidity()) {
+                form.submit();
+            } else {
+                form.reportValidity();
+            }
+        });
+
+        // Edit exception
+        document.querySelectorAll('.btn-edit-exception').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                fetch(`/get_exception/${id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('exception-id').value = data.id;
+                        document.getElementById('exception-employee').value = data.employee_id;
+                        document.getElementById('exception-date').value = data.date;
+                        document.getElementById('exception-reason').value = data.reason;
+                        document.getElementById('exception-hours').value = data.hours_credited;
+                        document.getElementById('exception-notes').value = data.notes;
+
+                        // Update modal title
+                        document.getElementById('exceptionModalLabel').textContent = "{{ t('edit_exception') or 'Edit Exception' }}";
+
+                        // Show modal
+                        const modal = new bootstrap.Modal(document.getElementById('exceptionModal'));
+                        modal.show();
+                    });
+            });
+        });
+
+        // Edit sick leave
+        document.querySelectorAll('.btn-edit-sick-leave').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                fetch(`/get_sick_leave/${id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('sick-leave-id').value = data.id;
+                        document.getElementById('sick-leave-employee').value = data.employee_id;
+                        document.getElementById('sick-leave-start').value = data.start_date;
+                        document.getElementById('sick-leave-end').value = data.end_date;
+                        document.getElementById('sick-leave-certificate').checked = data.medical_certificate;
+                        document.getElementById('sick-leave-reason').value = data.reason;
+                        document.getElementById('sick-leave-notes').value = data.notes;
+
+                        // Update modal title
+                        document.getElementById('sickLeaveModalLabel').textContent = "{{ t('edit_sick_leave') or 'Edit Sick Leave' }}";
+
+                        // Show modal
+                        const modal = new bootstrap.Modal(document.getElementById('sickLeaveModal'));
+                        modal.show();
+                    });
+            });
+        });
+
+        // Delete exception
+        document.querySelectorAll('.btn-delete-exception').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                if (confirm("{{ t('confirm_delete_exception') or 'Are you sure you want to delete this exception?' }}")) {
+                    window.location.href = `/delete_exception/${id}`;
+                }
+            });
+        });
+
+        // Delete sick leave
+        document.querySelectorAll('.btn-delete-sick-leave').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                if (confirm("{{ t('confirm_delete_sick_leave') or 'Are you sure you want to delete this sick leave?' }}")) {
+                    window.location.href = `/delete_sick_leave/${id}`;
                 }
             });
         });
